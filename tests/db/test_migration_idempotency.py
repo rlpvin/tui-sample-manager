@@ -13,8 +13,10 @@ def test_migrations_are_idempotent(test_db):
     cursor.execute("SELECT name FROM migrations")
     migrations = cursor.fetchall()
 
-    assert len(migrations) == 1
-    assert migrations[0]["name"] == "001_initial_schema.sql"
+    names = {row["name"] for row in migrations}
+
+    assert "001_initial_schema.sql" in names
+    assert "002_sample_directories.sql" in names
 
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
 
@@ -28,6 +30,7 @@ def test_migrations_are_idempotent(test_db):
         "collections",
         "file_hashes",
         "migrations",
+        "sample_directories",
     }
 
     assert tables == expected_tables
