@@ -38,3 +38,22 @@ def delete_sample(sample_id):
 
     cursor.execute("DELETE FROM samples WHERE id=?", (sample_id,))
     conn.commit()
+
+def bulk_create_samples(samples_list):
+    """
+    samples_list should be a list of tuples: 
+    [(path, filename, extension, size), ...]
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # executemany is significantly faster than a loop
+    cursor.executemany(
+        """
+        INSERT OR IGNORE INTO samples (path, filename, extension, size)
+        VALUES (?, ?, ?, ?)
+        """,
+        samples_list
+    )
+    conn.commit()
+
