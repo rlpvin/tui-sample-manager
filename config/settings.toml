@@ -8,3 +8,6 @@ sample_library = "~/Samples"
 [logging]
 level = "INFO"
 log_file = "logs/app.log"
+
+[database]
+path = "data/sample_manager.db"

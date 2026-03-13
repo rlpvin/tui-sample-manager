@@ -12,6 +12,7 @@ env/
 logs/
 
 # Database
+data/
 *.db
 
 # IDE
