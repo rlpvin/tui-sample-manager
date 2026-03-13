@@ -1,0 +1,10 @@
+[app]
+name = "TUI Sample Manager"
+version = "0.1"
+
+[paths]
+sample_library = "~/Samples"
+
+[logging]
+level = "INFO"
+log_file = "logs/app.log"
