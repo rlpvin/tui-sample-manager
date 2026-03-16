@@ -16,6 +16,7 @@ from sample_manager.db.sample_repository import (
     delete_sample
 )
 from sample_manager.utils.playback import Player
+from sample_manager.utils.batch import BatchProcessor
 
 class HelpScreen(Screen):
 
@@ -41,10 +42,13 @@ class HelpScreen(Screen):
                 "search <text>     - Search samples by name\n"
                 "tag <id> <tag>    - Add tag to a sample\n"
                 "untag <id> <tag>  - Remove tag from a sample\n"
-                "bulk-tag <q> <t>  - Tag all results matching <q>\n"
                 "tags              - List all available tags\n"
                 "rate <id> <1-5>   - Rate a sample\n"
                 "unrate <id>       - Remove rating from a sample\n"
+                "bulk-tag <q> <t>  - Tag all samples matching query\n"
+                "bulk-rename <q> <p,r> - Rename samples matching query\n"
+                "bulk-convert <q> <ext> - Convert samples matching query\n"
+                "bulk-normalize <q> [db] - Normalize volume matching query\n"
                 "duplicates        - Find and manage duplicate samples\n"
                 "stats             - Show database statistics\n\n"
                 "Advanced Filtering (works in Search or Command Modal):\n\n"
@@ -276,44 +280,6 @@ class SampleManagerApp(App):
         overflow-y: scroll;
     }
 
-    /* Duplicates Cleanup Tool */
-    DuplicatesScreen {
-        align: center middle;
-    }
-
-    #duplicates_container {
-        width: 90%;
-        height: 90%;
-        background: #1a1b26;
-        border: thick #7aa2f7;
-        padding: 1;
-    }
-
-    #duplicates_title {
-        width: 100%;
-        content-align: center middle;
-        text-style: bold;
-        color: #7aa2f7;
-        padding: 1;
-    }
-
-    #duplicates_desc {
-        padding: 0 1 1 1;
-        color: #c0caf5;
-    }
-
-    #duplicates_list {
-        height: 1fr;
-        border: solid #414868;
-    }
-
-    #duplicates_footer {
-        height: auto;
-        background: #24283b;
-        color: #bb9af7;
-        padding: 0 1;
-    }
-
     #duplicates_help {
         width: 100%;
         text-align: center;
@@ -405,6 +371,8 @@ class SampleManagerApp(App):
         self.audition_mode = False
         self.sort_column = "filename"
         self.sort_direction = "ASC"
+        self.current_sample_ids = []
+        self.batch_processor = BatchProcessor(log_callback=self.log_result)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -518,7 +486,11 @@ class SampleManagerApp(App):
             return
 
         # Known base commands
-        base_commands = {"scan", "rescan", "list", "dirs", "add-dir", "rm-dir", "tag", "rate", "stats", "search", "duplicates"}
+        base_commands = {
+            "scan", "rescan", "list", "dirs", "add-dir", "rm-dir", 
+            "tag", "rate", "stats", "search", "duplicates",
+            "bulk-tag", "bulk-rename", "bulk-convert", "bulk-normalize"
+        }
         first_word = cmd_text.split()[0].lower() if cmd_text.split() else ""
 
         # Intercept search for better UI experience
@@ -527,16 +499,27 @@ class SampleManagerApp(App):
             self.perform_search(query)
             return
         
-        # Handle bulk-tag separately to use advanced parser if needed
-        if first_word == "bulk-tag":
+        # Handle bulk commands
+        if first_word.startswith("bulk-"):
             parts = cmd_text.split(None, 2)
             if len(parts) >= 3:
                 query = parts[1]
-                tag = parts[2]
-                self.perform_bulk_tag(query, tag)
+                param = parts[2]
+                if first_word == "bulk-tag":
+                    self.perform_bulk_tag(query, param)
+                elif first_word == "bulk-rename":
+                    self.perform_bulk_rename(query, param)
+                elif first_word == "bulk-convert":
+                    self.perform_bulk_convert(query, param)
+                elif first_word == "bulk-normalize":
+                    self.perform_bulk_normalize(query, param)
+                return
+            elif first_word == "bulk-normalize" and len(parts) == 2:
+                # Normalize can have optional DB param
+                self.perform_bulk_normalize(parts[1], "-1.5")
                 return
             else:
-                self.log_result("Error: bulk-tag requires <query> <tag>")
+                self.log_result(f"Error: {first_word} requires <query> <parameters>")
                 return
         
         # Auto-detect filtering if it contains a colon and isn't a known command
@@ -616,6 +599,8 @@ class SampleManagerApp(App):
              
         target_table.clear()
         results = search_samples(filters, sort_by=sort_by, sort_order=sort_order)
+        self.current_sample_ids = [s["id"] for s in results]
+
         for s in results:
             target_table.add_row(
                 str(s["id"]),
@@ -630,46 +615,59 @@ class SampleManagerApp(App):
         self.log_result(f"Search results for [{filter_summary}] (Sort: {sort_by}): {len(results)}")
 
     def perform_bulk_tag(self, query: str, tag: str) -> None:
-        """Apply a tag to all samples matching a query."""
-        # Use our existing complex parser logic via a helper or just re-parse
-        # For simplicity, we'll re-parse or use the perform_search logic
+        self.perform_search(query)
+        if not self.current_sample_ids:
+            self.log_result(f"No samples found for query: {query}")
+            return
+            
+        count = 0
+        from sample_manager.db.tag_repository import add_tag_to_sample
+        for sid in self.current_sample_ids:
+            add_tag_to_sample(sid, tag)
+            count += 1
         
-        # We need results, so let's extract the parsing logic if we had time, 
-        # but for now we'll just run search_samples with the filters.
-        
-        # Re-use parsing logic (ideally this should be a static method)
-        filters = {}
-        parts = query.split()
-        remaining_query = []
-        for part in parts:
-            part = part.strip(",")
-            if ":" in part:
-                key, val = part.split(":", 1)
-                # ... rating/type/tag logic ...
-                # (Duplicating for now, refactoring later)
-                if key == "tag": filters["tag"] = val
-                elif key == "type": filters["type"] = val
-                elif key == "rating":
-                    import re
-                    match = re.match(r"([><=]{1,2})?(\d)", val)
-                    if match:
-                        op = match.group(1) or "="
-                        filters["rating"] = (op, int(match.group(2)))
-            else:
-                remaining_query.append(part)
-        if remaining_query:
-            filters["query"] = " ".join(remaining_query)
+        self.log_result(f"Bulk tagged {count} samples with '{tag}'")
+        self.action_refresh_samples()
 
-        results = search_samples(filters)
-        if not results:
-            self.log_result(f"No samples found matching '{query}'. Bulk tag aborted.")
+    def perform_bulk_rename(self, query: str, params: str) -> None:
+        if "," not in params:
+            self.log_result("Error: bulk-rename requires <query> <pattern>,<replacement>")
+            return
+            
+        pattern, replacement = params.split(",", 1)
+        self.perform_search(query)
+        if not self.current_sample_ids:
+            self.log_result(f"No samples found for query: {query}")
+            return
+            
+        count = self.batch_processor.rename_samples(self.current_sample_ids, pattern, replacement)
+        self.log_result(f"Bulk renamed {count} samples.")
+        self.action_refresh_samples()
+
+    def perform_bulk_convert(self, query: str, target_ext: str) -> None:
+        self.perform_search(query)
+        if not self.current_sample_ids:
+            self.log_result(f"No samples found for query: {query}")
+            return
+            
+        count = self.batch_processor.convert_samples(self.current_sample_ids, target_ext)
+        self.log_result(f"Bulk converted {count} samples to {target_ext}.")
+        self.action_refresh_samples()
+
+    def perform_bulk_normalize(self, query: str, target_db: str) -> None:
+        try:
+            db_val = float(target_db)
+        except ValueError:
+            self.log_result("Error: target_db must be a number.")
             return
 
-        from sample_manager.db.tag_repository import add_tag_to_sample
-        for s in results:
-            add_tag_to_sample(s["id"], tag)
-        
-        self.log_result(f"Bulk tagged {len(results)} samples with '{tag}'.")
+        self.perform_search(query)
+        if not self.current_sample_ids:
+            self.log_result(f"No samples found for query: {query}")
+            return
+            
+        count = self.batch_processor.normalize_samples(self.current_sample_ids, db_val)
+        self.log_result(f"Bulk normalized {count} samples to {db_val}dB.")
         self.action_refresh_samples()
 
 class DuplicatesScreen(ModalScreen):
