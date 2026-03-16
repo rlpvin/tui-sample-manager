@@ -1,16 +1,16 @@
 from sample_manager.db.connection import get_connection
 
 
-def create_sample(path, filename, extension, size, hash_val=None):
+def create_sample(path, filename, extension, size, hash_val=None, bpm=0, musical_key=None, duration=0):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         """
-        INSERT OR IGNORE INTO samples (path, filename, extension, size, hash)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO samples (path, filename, extension, size, hash, bpm, musical_key, duration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (path, filename, extension, size, hash_val),
+        (path, filename, extension, size, hash_val, bpm, musical_key, duration),
     )
 
     conn.commit()
@@ -106,18 +106,24 @@ def bulk_create_samples(samples_list):
     cursor = conn.cursor()
     
     data_to_insert = [
-        (s["path"], s["filename"], s["extension"], s["size"], s.get("hash"))
+        (
+            s["path"], s["filename"], s["extension"], s["size"], 
+            s.get("hash"), s.get("bpm", 0), s.get("musical_key"), s.get("duration", 0)
+        )
         for s in samples_list
     ]
     
     cursor.executemany(
         """
-        INSERT INTO samples (path, filename, extension, size, hash)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO samples (path, filename, extension, size, hash, bpm, musical_key, duration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(path) DO UPDATE SET
             size = excluded.size,
             filename = excluded.filename,
-            hash = excluded.hash
+            hash = excluded.hash,
+            bpm = excluded.bpm,
+            musical_key = excluded.musical_key,
+            duration = excluded.duration
         """,
         data_to_insert
     )
@@ -184,6 +190,8 @@ def search_samples(filters=None, sort_by="filename", sort_order="ASC"):
         "tags": "tags",
         "rating": "r.rating", 
         "bpm": "s.bpm", 
+        "key": "s.musical_key",
+        "duration": "s.duration",
         "date": "s.created_at"
     }
     sort_field = allowed_sort_fields.get(sort_by, "s.filename")

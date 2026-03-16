@@ -6,21 +6,24 @@ from sample_manager.scanner.metadata import extract_metadata
 from sample_manager.utils.hashing import calculate_hash
 
 
-def index_samples():
+def index_samples(analyze: bool = False):
     directories = get_registered_directories()
     all_metadata = []
 
     for directory in directories:
-        print(f"Scanning: {directory}")
+        print(f"Scanning: {directory} (Deep Analysis: {analyze})")
         for path in scan_directory(directory):
-            meta = extract_metadata(path)
-            # Store as a tuple for the DB
+            meta = extract_metadata(path, analyze=analyze)
+            # Store with all fields
             all_metadata.append({
                 "path": meta["path"],
                 "filename": meta["filename"],
                 "extension": meta["extension"],
                 "size": meta["size"],
-                "hash": calculate_hash(path)
+                "hash": calculate_hash(path),
+                "bpm": meta["bpm"],
+                "musical_key": meta["musical_key"],
+                "duration": meta["duration"]
             })
 
     if all_metadata:

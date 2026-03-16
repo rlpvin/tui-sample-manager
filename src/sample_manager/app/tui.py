@@ -50,14 +50,17 @@ class HelpScreen(Screen):
                 "bulk-convert <q> <ext> - Convert samples matching query\n"
                 "bulk-normalize <q> [db] - Normalize volume matching query\n"
                 "duplicates        - Find and manage duplicate samples\n"
+                "analyze <id>      - Deep analysis (Key/BPM). Skips one-shots.\n"
+                "scan --analyze    - Library scan with deep analysis enabled\n"
                 "stats             - Show database statistics\n\n"
                 "Advanced Filtering (works in Search or Command Modal):\n\n"
                 "tag:<name>        - Filter by tag\n"
                 "type:<ext>        - Filter by file extension\n"
                 "rating:<[><=]val> - Filter by rating (e.g., rating:>3)\n"
-                "sort:<field>      - Sort (filename, rating, bpm, date)\n"
+                "sort:<field>      - Sort (filename, rating, bpm, duration)\n"
                 "                    Use '-' for descending (e.g., sort:-bpm)\n"
-                "Duplicates: type 'duplicates' to open the cleanup tool.\n\n"
+                "Duplicates: type 'duplicates' to open the cleanup tool.\n"
+                "Duration: Shown as '30s' or '1m 20s' (60s+).\n\n"
                 "Example: tag:kick type:wav rating:>3 search heavy\n",
                 id="help_text"
             ),
@@ -143,7 +146,8 @@ class SampleTable(DataTable):
             "Tags": "tags",
             "Rating": "rating",
             "BPM": "bpm",
-            "Date": "date"
+            "Key": "key",
+            "Dur": "duration"
         }
         
         column_label = str(event.column_key.value)
@@ -193,7 +197,7 @@ class SampleListScreen(Screen):
 
     def on_mount(self) -> None:
         table = self.query_one(SampleTable)
-        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Date")
+        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Key", "Dur")
         table.cursor_type = "row"
         table.focus()
         self.app.action_refresh_samples()
@@ -287,8 +291,8 @@ class SampleManagerApp(App):
 
     #help_container {
         align: center middle;
-        width: 60;
-        height: 35;
+        width: 70;
+        height: 45;
         border: double #7aa2f7;
         background: #1a1b26;
         padding: 1 2;
@@ -298,6 +302,12 @@ class SampleManagerApp(App):
         text-align: center;
         text-style: bold;
         color: #7aa2f7;
+        margin-bottom: 1;
+    }
+
+    #help_text {
+        overflow-y: scroll;
+        height: 1fr;
         margin-bottom: 1;
     }
 
@@ -389,7 +399,7 @@ class SampleManagerApp(App):
 
     def on_mount(self) -> None:
         table = self.query_one("#sample_list", SampleTable)
-        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Date")
+        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Key", "Dur")
         table.cursor_type = "row"
         self.action_refresh_samples()
 
@@ -480,6 +490,18 @@ class SampleManagerApp(App):
             else:
                 self.log_result(f"Playing: {os.path.basename(path)}")
 
+    def format_duration(self, seconds: float) -> str:
+        """Format duration into a readable string (e.g., 30s, 1m 20s)."""
+        if seconds < 60:
+            return f"{int(round(seconds))}s"
+        
+        minutes = int(seconds // 60)
+        remaining_seconds = int(round(seconds % 60))
+        
+        if remaining_seconds == 0:
+            return f"{minutes}m"
+        return f"{minutes}m {remaining_seconds}s"
+
     def handle_command_text(self, cmd_text: str) -> None:
         cmd_text = cmd_text.strip()
         if not cmd_text:
@@ -529,6 +551,26 @@ class SampleManagerApp(App):
 
         if cmd_text.lower() == "duplicates":
             self.push_screen(DuplicatesScreen())
+            return
+
+        if first_word == "analyze":
+            parts = cmd_text.split()
+            if len(parts) >= 2:
+                # analyze <id>
+                try:
+                    sid = int(parts[1])
+                    self.perform_deep_analyze(sid)
+                except ValueError:
+                    self.log_result("Error: Sample ID must be a number.")
+            else:
+                self.log_result("Error: analyze requires <id>.")
+            return
+
+        if first_word == "scan" and "--analyze" in cmd_text:
+            self.log_result("Starting deep scan (BPM/Key detection enabled)...")
+            from sample_manager.scanner.indexer import index_samples
+            index_samples(analyze=True)
+            self.action_refresh_samples()
             return
 
         # Handle other commands via controller
@@ -608,7 +650,8 @@ class SampleManagerApp(App):
                 s["tags"] or "",
                 str(s["rating"]) if s["rating"] is not None else "",
                 str(s["bpm"]) if s["bpm"] is not None else "",
-                s["created_at"][:10] if s["created_at"] else ""
+                s["musical_key"] or "",
+                self.format_duration(s["duration"]) if s["duration"] else ""
             )
         
         filter_summary = ", ".join([f"{k}:{v}" for k,v in filters.items()])
@@ -668,6 +711,23 @@ class SampleManagerApp(App):
             
         count = self.batch_processor.normalize_samples(self.current_sample_ids, db_val)
         self.log_result(f"Bulk normalized {count} samples to {db_val}dB.")
+        self.action_refresh_samples()
+
+    def perform_deep_analyze(self, sample_id: int) -> None:
+        from sample_manager.db.sample_repository import get_sample_by_id, bulk_create_samples
+        sample = get_sample_by_id(sample_id)
+        if not sample:
+            self.log_result(f"Sample {sample_id} not found.")
+            return
+            
+        self.log_result(f"Analyzing sample {sample_id} ({sample['filename']})...")
+        from sample_manager.scanner.metadata import extract_metadata
+        from pathlib import Path
+        meta = extract_metadata(Path(sample["path"]), analyze=True)
+        
+        # Update DB using bulk_create_samples which handles conflict/update
+        bulk_create_samples([meta])
+        self.log_result(f"Analysis complete: BPM={meta['bpm']}, Key={meta['musical_key']}, Dur={meta['duration']}s")
         self.action_refresh_samples()
 
 class DuplicatesScreen(ModalScreen):
