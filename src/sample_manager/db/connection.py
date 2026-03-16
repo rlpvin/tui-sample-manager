@@ -19,5 +19,11 @@ def get_connection():
 
         _connection = sqlite3.connect(db_path)
         _connection.row_factory = sqlite3.Row
+        
+        # Reliability improvements:
+        # WAL mode allows concurrent reads and is much more resilient to corruption on crash
+        _connection.execute("PRAGMA journal_mode=WAL")
+        # Ensure data integrity via foreign keys
+        _connection.execute("PRAGMA foreign_keys=ON")
 
     return _connection

@@ -81,6 +81,32 @@ class HelpScreen(Screen):
     def on_key(self) -> None:
         self.app.pop_screen()
 
+class ConfirmationDialog(ModalScreen):
+    """A modal dialog for Yes/No confirmation."""
+    
+    def __init__(self, message: str, callback):
+        super().__init__()
+        self.message = message
+        self.callback = callback
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static(self.message, id="dialog_message"),
+            Horizontal(
+                Static("Press 'y' for Yes, 'n' or Esc for No", id="dialog_footer"),
+                id="dialog_buttons"
+            ),
+            id="dialog_container"
+        )
+
+    def on_key(self, event) -> None:
+        if event.key == "y":
+            self.callback(True)
+            self.app.pop_screen()
+        elif event.key in ("n", "escape"):
+            self.callback(False)
+            self.app.pop_screen()
+
 class InputDialog(ModalScreen):
     """A modal dialog to get text input."""
     
@@ -350,6 +376,16 @@ class SampleManagerApp(App):
         margin-top: 1;
     }
 
+    #dialog_message {
+        text-align: center;
+        margin-bottom: 2;
+    }
+
+    #dialog_buttons {
+        height: auto;
+        align: center middle;
+    }
+
     #command_dialog_container {
         dock: top;
         width: 100%;
@@ -584,6 +620,24 @@ class SampleManagerApp(App):
             self.action_refresh_samples()
             return
 
+        if first_word == "rm-dir":
+            parts = cmd_text.split()
+            if len(parts) >= 2:
+                dir_path = " ".join(parts[1:])
+                def do_remove(confirmed):
+                    if confirmed:
+                        try:
+                            # Use router or controller
+                            result = self.controller.handle_input(f"rm-dir {dir_path}")
+                            self.log_result(result)
+                            self.action_refresh_samples()
+                        except Exception as e:
+                            self.log_result(f"Error: {e}")
+                self.push_screen(ConfirmationDialog(f"Remove directory '{dir_path}' from library?", do_remove))
+            else:
+                self.log_result("Error: rm-dir requires <path>.")
+            return
+
         # Handle other commands via controller
         result = self.controller.handle_input(cmd_text)
         self.log_result(result)
@@ -809,8 +863,12 @@ class DuplicatesScreen(ModalScreen):
                 if sample_id == "---":
                     return
                 
+                def do_delete(confirmed):
+                    if confirmed:
+                        self.confirm_delete(sample_id, "YES")
+
                 self.app.push_screen(
-                    InputDialog(f"Are you sure you want to delete sample {sample_id}?", placeholder="Type 'YES' to confirm", callback=lambda val: self.confirm_delete(sample_id, val))
+                    ConfirmationDialog(f"Delete sample {sample_id} from database?", do_delete)
                 )
         elif event.key == "escape":
             self.dismiss()

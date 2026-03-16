@@ -30,7 +30,15 @@ class BatchProcessor:
             if new_filename == old_filename:
                 continue
 
+            if not os.path.exists(old_path):
+                self.log(f"Error: Source file not found: {old_path}")
+                continue
+
             new_path = os.path.join(old_dir, new_filename)
+            
+            if os.path.exists(new_path):
+                self.log(f"Error: Destination already exists: {new_path}")
+                continue
             
             try:
                 os.rename(old_path, new_path)
@@ -70,6 +78,10 @@ class BatchProcessor:
             base_path, _ = os.path.splitext(old_path)
             new_path = base_path + target_ext
             
+            if not os.path.exists(old_path):
+                self.log(f"Error: Source file not found: {old_path}")
+                continue
+
             if old_path == new_path:
                 continue
 
@@ -117,6 +129,10 @@ class BatchProcessor:
                 continue
 
             path = sample["path"]
+            if not os.path.exists(path):
+                self.log(f"Error: Source file not found: {path}")
+                continue
+
             temp_path = path + ".tmp.wav"
             
             try:
