@@ -1,6 +1,10 @@
-def test_tables_exist(test_db):
+from sample_manager.db.connection import get_connection
 
-    cursor = test_db.cursor()
+
+def test_tables_exist():
+
+    conn = get_connection()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
 

@@ -6,9 +6,10 @@ from sample_manager.db.sample_repository import create_sample
 
 def test_rating_valid(test_db):
 
+    cursor = test_db.cursor()
+
     create_sample("/test.wav", "test.wav", "wav", 100)
 
-    cursor = test_db.cursor()
     cursor.execute("SELECT id FROM samples")
 
     sample_id = cursor.fetchone()["id"]
@@ -22,12 +23,13 @@ def test_rating_valid(test_db):
 
 def test_rating_invalid(test_db):
 
+    cursor = test_db.cursor()
+
     create_sample("/test.wav", "test.wav", "wav", 100)
 
-    cursor = test_db.cursor()
     cursor.execute("SELECT id FROM samples")
 
     sample_id = cursor.fetchone()["id"]
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         set_rating(sample_id, 7)

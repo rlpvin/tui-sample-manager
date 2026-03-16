@@ -1,14 +1,13 @@
+from sample_manager.db.connection import get_connection
 from sample_manager.db.migrate import run_migrations
 
 
-def test_migrations_are_idempotent(test_db):
-    """
-    Running migrations multiple times should not reapply them.
-    """
+def test_migrations_are_idempotent():
 
     run_migrations()
 
-    cursor = test_db.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT name FROM migrations")
     migrations = cursor.fetchall()
