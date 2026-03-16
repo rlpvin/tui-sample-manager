@@ -129,6 +129,33 @@ class SampleTable(DataTable):
     def action_search(self) -> None:
         self.app.prompt_search()
 
+    @on(DataTable.HeaderSelected)
+    def on_header_clicked(self, event: DataTable.HeaderSelected) -> None:
+        """Handle header clicks to sort by the clicked column."""
+        # Map labels to field names
+        label_map = {
+            "ID": "id",
+            "Filename": "filename",
+            "Tags": "tags",
+            "Rating": "rating",
+            "BPM": "bpm",
+            "Date": "date"
+        }
+        
+        column_label = str(event.column_key.value)
+        field = label_map.get(column_label)
+        
+        if field:
+            # Toggle direction if clicking same column
+            if getattr(self.app, "sort_column", "filename") == field:
+                current_dir = getattr(self.app, "sort_direction", "ASC")
+                self.app.sort_direction = "DESC" if current_dir == "ASC" else "ASC"
+            else:
+                self.app.sort_column = field
+                self.app.sort_direction = "ASC"
+            
+            self.app.action_refresh_samples()
+
     def action_add_tag(self) -> None:
         row_key = self.cursor_row
         if row_key is not None:
@@ -376,6 +403,8 @@ class SampleManagerApp(App):
         self.last_query = ""
         self.player = Player()
         self.audition_mode = False
+        self.sort_column = "filename"
+        self.sort_direction = "ASC"
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -538,8 +567,8 @@ class SampleManagerApp(App):
         self.last_query = query
         # Complex parser for query
         filters = {}
-        sort_by = "filename"
-        sort_order = "ASC"
+        sort_by = self.sort_column
+        sort_order = self.sort_direction
 
         parts = query.split()
         remaining_query = []
@@ -564,6 +593,9 @@ class SampleManagerApp(App):
                     if sort_by.startswith("-"):
                         sort_by = sort_by[1:]
                         sort_order = "DESC"
+                    # Update global sort state when using command
+                    self.sort_column = sort_by
+                    self.sort_direction = sort_order
             else:
                 remaining_query.append(part)
         

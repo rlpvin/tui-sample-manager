@@ -178,8 +178,10 @@ def search_samples(filters=None, sort_by="filename", sort_order="ASC"):
 
     # Sorting
     allowed_sort_fields = {
+        "id": "s.id",
         "filename": "s.filename", 
         "name": "s.filename",
+        "tags": "tags",
         "rating": "r.rating", 
         "bpm": "s.bpm", 
         "date": "s.created_at"
