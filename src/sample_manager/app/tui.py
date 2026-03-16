@@ -1,3 +1,4 @@
+import os
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Header, Footer, Static, Input, DataTable
@@ -7,7 +8,8 @@ from textual.screen import Screen
 from textual import on
 
 from sample_manager.app.controller import ApplicationController
-from sample_manager.db.sample_repository import get_all_samples, search_samples
+from sample_manager.db.sample_repository import get_all_samples, search_samples, get_sample_by_id
+from sample_manager.utils.playback import Player
 
 class HelpScreen(Screen):
 
@@ -24,6 +26,7 @@ class HelpScreen(Screen):
                 "c           - Clear results panel output\n\n"
                 "List Shortcuts (when list focused):\n"
                 "Arrows      - Navigate samples\n"
+                "Space       - Play / Stop focused sample\n"
                 "t           - Add Tag to selected sample\n"
                 "r           - Add Rating to selected sample\n"
                 "/           - Quick search dialog\n\n"
@@ -93,7 +96,27 @@ class SampleTable(DataTable):
         Binding("t", "add_tag", "Add Tag", show=False),
         Binding("r", "add_rating", "Add Rating", show=False),
         Binding("/", "search", "Search", show=False),
+        Binding("space", "toggle_playback", "Play", show=False),
     ]
+
+    def action_toggle_playback(self) -> None:
+        row_key = self.cursor_row
+        if row_key is not None:
+            # Get ID from first column
+            row_data = self.get_row_at(row_key)
+            sample_id = row_data[0]
+            self.app.action_toggle_playback(sample_id)
+
+    @on(DataTable.RowHighlighted)
+    def on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Stop playback when moving to a new sample, or auto-play if in audition mode."""
+        if hasattr(self.app, "player"):
+            self.app.player.stop()
+            if getattr(self.app, "audition_mode", False):
+                # Get ID from first column of the new row
+                row_data = self.get_row_at(event.cursor_row)
+                sample_id = row_data[0]
+                self.app.action_toggle_playback(sample_id, is_auto=True)
 
     def action_search(self) -> None:
         self.app.prompt_search()
@@ -299,6 +322,8 @@ class SampleManagerApp(App):
         super().__init__()
         self.controller = ApplicationController()
         self.last_query = ""
+        self.player = Player()
+        self.audition_mode = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -308,6 +333,10 @@ class SampleManagerApp(App):
                 yield Static("System Output:", id="output_header")
                 yield Static("", id="output_text")
         yield Footer()
+
+    def on_unmount(self) -> None:
+        """Ensure playback stops when application exits."""
+        self.player.stop()
 
     def on_mount(self) -> None:
         table = self.query_one("#sample_list", SampleTable)
@@ -379,6 +408,28 @@ class SampleManagerApp(App):
 
     def action_show_command_bar(self) -> None:
         self.push_screen(CommandScreen())
+
+    def action_toggle_playback(self, sample_id: str, is_auto: bool = False) -> None:
+        """Play or stop the selected sample. is_auto is True when triggered by navigation."""
+        if self.player.is_playing():
+            self.player.stop()
+            if not is_auto:
+                # Manual stop exits audition mode
+                self.audition_mode = False
+                return
+
+        if not is_auto:
+            # Manual start enters audition mode
+            self.audition_mode = True
+
+        sample = get_sample_by_id(sample_id)
+        if sample:
+            path = sample["path"]
+            if not self.player.play(path):
+                self.log_result(f"Error: Playback failed for {path}")
+                self.audition_mode = False
+            else:
+                self.log_result(f"Playing: {os.path.basename(path)}")
 
     def handle_command_text(self, cmd_text: str) -> None:
         cmd_text = cmd_text.strip()
