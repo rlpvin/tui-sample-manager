@@ -1,12 +1,12 @@
 """
 CLI entry point for the TUI Sample Manager.
 """
-from sample_manager.scanner.directories import register_directory
-from sample_manager.scanner.indexer import reindex
 from sample_manager.config import load_config
 from sample_manager.db.init_db import initialize_database
 from sample_manager.db.migrate import run_migrations
 from sample_manager.logger import setup_logging
+from sample_manager.scanner.directories import register_directory
+from sample_manager.scanner.indexer import reindex
 
 
 def main():

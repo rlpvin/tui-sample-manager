@@ -39,21 +39,48 @@ def delete_sample(sample_id):
     cursor.execute("DELETE FROM samples WHERE id=?", (sample_id,))
     conn.commit()
 
+
 def bulk_create_samples(samples_list):
-    """
-    samples_list should be a list of tuples: 
-    [(path, filename, extension, size), ...]
-    """
     conn = get_connection()
     cursor = conn.cursor()
     
-    # executemany is significantly faster than a loop
+    data_to_insert = [
+        (s["path"], s["filename"], s["extension"], s["size"])
+        for s in samples_list
+    ]
+    
     cursor.executemany(
         """
-        INSERT OR IGNORE INTO samples (path, filename, extension, size)
+        INSERT INTO samples (path, filename, extension, size)
         VALUES (?, ?, ?, ?)
+        ON CONFLICT(path) DO UPDATE SET
+            size = excluded.size,
+            filename = excluded.filename
         """,
-        samples_list
+        data_to_insert
     )
     conn.commit()
 
+def search_samples(query):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Use parameterized query to prevent SQL injection
+    like_query = f"%{query}%"
+    cursor.execute(
+        """
+        SELECT * FROM samples 
+        WHERE filename LIKE ? OR extension LIKE ?
+        """,
+        (like_query, like_query),
+    )
+    return cursor.fetchall()
+
+
+def get_sample_count():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM samples")
+    return cursor.fetchone()[0]

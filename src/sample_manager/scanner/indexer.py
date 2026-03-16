@@ -1,8 +1,9 @@
-from sample_manager.scanner.file_scanner import scan_directory
-from sample_manager.scanner.metadata import extract_metadata
-from sample_manager.scanner.directories import get_registered_directories
 from sample_manager.db.connection import get_connection
 from sample_manager.db.sample_repository import bulk_create_samples
+from sample_manager.scanner.directories import get_registered_directories
+from sample_manager.scanner.file_scanner import scan_directory
+from sample_manager.scanner.metadata import extract_metadata
+
 
 def index_samples():
     directories = get_registered_directories()
@@ -13,12 +14,12 @@ def index_samples():
         for path in scan_directory(directory):
             meta = extract_metadata(path)
             # Store as a tuple for the DB
-            all_metadata.append((
-                meta["path"],
-                meta["filename"],
-                meta["extension"],
-                meta["size"]
-            ))
+            all_metadata.append({
+                "path": meta["path"],
+                "filename": meta["filename"],
+                "extension": meta["extension"],
+                "size": meta["size"]
+            })
 
     if all_metadata:
         bulk_create_samples(all_metadata)

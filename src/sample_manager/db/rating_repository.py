@@ -2,6 +2,8 @@ from sample_manager.db.connection import get_connection
 
 
 def set_rating(sample_id, rating):
+    if not (1 <= rating <= 5):
+        raise ValueError("Rating must be between 1 and 5")
     conn = get_connection()
     cursor = conn.cursor()
 
