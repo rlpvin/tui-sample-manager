@@ -16,30 +16,34 @@ class HelpScreen(Screen):
             Static("Sample Manager Help", id="help_title"),
             Static(
                 "Keyboard Shortcuts:\n\n"
-                "q       - Quit Application\n"
-                "s       - Refetch/Refresh samples\n"
-                "f       - Focus Search/Command Input\n"
-                "l       - Toggle Full-Screen List View\n"
-                "h       - Toggle this help screen\n"
-                "c       - Clear results panel\n\n"
-                "List Controls:\n"
-                "Arrows  - Navigate samples\n"
-                "t       - Add Tag to focused sample\n"
-                "untag <id> <tag> - Remove Tag\n"
-                "r       - Add Rating to focused sample\n"
-                "/       - Search within list\n\n"
-                "Commands (enter in input area):\n\n"
-                "scan          - Scan registered directories for new samples\n"
-                "rescan        - Full reindex (checks for deleted files)\n"
-                "search <text> - Search samples by name or extension\n"
-                "add-dir <path>- Register a new directory\n"
-                "rm-dir <path> - Unregister a directory\n"
-                "tag <id> <tag>- Add a tag to a sample\n"
-                "untag <id> <t>- Remove a tag from a sample\n"
-                "bulk-tag <q> <t>- Add tag to all results of search <q>\n"
-                "tags          - List all tags\n"
-                "rate <id> <1-5>- Rate a sample\n"
-                "stats         - Show database statistics\n",
+                "q           - Quit Application\n"
+                "s           - Refresh samples (maintains filters)\n"
+                "f           - Focus Command / Search Modal\n"
+                "l           - Toggle Full-Screen List View\n"
+                "h           - Toggle this help screen\n"
+                "c           - Clear results panel output\n\n"
+                "List Shortcuts (when list focused):\n"
+                "Arrows      - Navigate samples\n"
+                "t           - Add Tag to selected sample\n"
+                "r           - Add Rating to selected sample\n"
+                "/           - Quick search dialog\n\n"
+                "Commands (enter in Command Modal 'f'):\n\n"
+                "scan              - Scan for new samples\n"
+                "search <text>     - Search samples by name\n"
+                "tag <id> <tag>    - Add tag to a sample\n"
+                "untag <id> <tag>  - Remove tag from a sample\n"
+                "bulk-tag <q> <t>  - Tag all results matching <q>\n"
+                "tags              - List all available tags\n"
+                "rate <id> <1-5>   - Rate a sample\n"
+                "unrate <id>       - Remove rating from a sample\n"
+                "stats             - Show database statistics\n\n"
+                "Advanced Filtering (works in Search or Command Modal):\n\n"
+                "tag:<name>        - Filter by tag\n"
+                "type:<ext>        - Filter by file extension\n"
+                "rating:<[><=]val> - Filter by rating (e.g., rating:>3)\n"
+                "sort:<field>      - Sort (filename, rating, bpm, date)\n"
+                "                    Use '-' for descending (e.g., sort:-bpm)\n"
+                "Example: tag:kick type:wav rating:>3 search heavy\n",
                 id="help_text"
             ),
             Static("Press any key to close", id="help_footer"),
@@ -413,7 +417,7 @@ class SampleManagerApp(App):
         self.log_result(result)
         
         # If command might change data, refresh list
-        if any(keyword in cmd_text.lower() for keyword in ("scan", "tag", "rate", "rm-dir")):
+        if any(keyword in cmd_text.lower() for keyword in ("scan", "tag", "rate", "unrate", "rm-dir")):
             self.action_refresh_samples()
 
     @on(Input.Submitted)

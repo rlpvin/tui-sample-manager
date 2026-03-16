@@ -32,3 +32,14 @@ def get_rating(sample_id):
     row = cursor.fetchone()
 
     return row["rating"] if row else None
+
+
+def remove_rating(sample_id):
+    """
+    Remove the rating for a sample.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM ratings WHERE sample_id = ?", (sample_id,))
+    conn.commit()

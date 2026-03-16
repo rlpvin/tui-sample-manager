@@ -1,5 +1,5 @@
 from sample_manager.app.validators import validate_directory
-from sample_manager.db.rating_repository import set_rating
+from sample_manager.db.rating_repository import set_rating, remove_rating
 from sample_manager.db.sample_repository import (
     get_all_samples,
     get_sample_count,
@@ -57,6 +57,9 @@ class CommandRouter:
 
         if name == "rate":
             return self.rate_sample(args)
+
+        if name == "unrate":
+            return self.unrate_sample(args)
 
         if name == "untag":
             return self.untag_sample(args)
@@ -237,6 +240,19 @@ class CommandRouter:
         set_rating(sample_id, rating)
 
         return f"Sample {sample_id} rated {rating}/5"
+
+    # --------------------------------------------------
+
+    def unrate_sample(self, args):
+
+        if not args:
+            raise ValueError("unrate requires: sample_id")
+
+        sample_id = int(args[0])
+
+        remove_rating(sample_id)
+
+        return f"Rating removed for sample {sample_id}"
 
     # --------------------------------------------------
 

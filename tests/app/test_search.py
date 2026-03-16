@@ -55,3 +55,28 @@ def test_search_samples_sorting(test_db):
     results = search_samples(sort_by="filename", sort_order="DESC")
     assert results[0]["filename"] == "b.wav"
     assert results[1]["filename"] == "a.wav"
+
+def test_search_samples_rating_sorting(test_db):
+    create_sample("/samples/r1.wav", "r1.wav", ".wav", 1024)
+    create_sample("/samples/r2.wav", "r2.wav", ".wav", 1024)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM samples WHERE filename='r1.wav'")
+    id1 = cursor.fetchone()[0]
+    cursor.execute("SELECT id FROM samples WHERE filename='r2.wav'")
+    id2 = cursor.fetchone()[0]
+    
+    cursor.execute("INSERT INTO ratings (sample_id, rating) VALUES (?, ?)", (id1, 1))
+    cursor.execute("INSERT INTO ratings (sample_id, rating) VALUES (?, ?)", (id2, 5))
+    conn.commit()
+    
+    # Sort by rating ASC (1 then 5)
+    results = search_samples(sort_by="rating", sort_order="ASC")
+    assert results[0]["filename"] == "r1.wav"
+    assert results[1]["filename"] == "r2.wav"
+    
+    # Sort by rating DESC (5 then 1)
+    results = search_samples(sort_by="rating", sort_order="DESC")
+    assert results[0]["filename"] == "r2.wav"
+    assert results[1]["filename"] == "r1.wav"
