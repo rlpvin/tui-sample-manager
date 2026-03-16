@@ -15,4 +15,4 @@ def test_search_samples(test_db):
     results = search_samples("kick")
 
     assert len(results) == 1
-    assert results[0][1] == "kick.wav"
+    assert results[0]["filename"] == "kick.wav"
