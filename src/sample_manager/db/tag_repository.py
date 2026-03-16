@@ -59,3 +59,34 @@ def get_tags_for_sample(sample_id: int):
     rows = cursor.fetchall()
 
     return [row[0] for row in rows]
+
+
+def remove_tag_from_sample(sample_id: int, tag_name: str):
+    """
+    Remove a tag from a sample.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM sample_tags 
+        WHERE sample_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)
+        """,
+        (sample_id, tag_name),
+    )
+
+    conn.commit()
+
+
+def get_all_tags():
+    """
+    Get a list of all existing tags.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name FROM tags ORDER BY name ASC")
+    rows = cursor.fetchall()
+
+    return [row[0] for row in rows]

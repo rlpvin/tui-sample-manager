@@ -5,7 +5,11 @@ from sample_manager.db.sample_repository import (
     get_sample_count,
     search_samples,
 )
-from sample_manager.db.tag_repository import add_tag_to_sample
+from sample_manager.db.tag_repository import (
+    add_tag_to_sample,
+    get_all_tags,
+    remove_tag_from_sample,
+)
 from sample_manager.scanner.directories import (
     get_registered_directories,
     register_directory,
@@ -53,6 +57,15 @@ class CommandRouter:
 
         if name == "rate":
             return self.rate_sample(args)
+
+        if name == "untag":
+            return self.untag_sample(args)
+
+        if name == "tags":
+            return self.list_tags()
+
+        if name == "bulk-tag":
+            return self.bulk_tag(args)
 
         if name == "stats":
             return self.stats()
@@ -161,6 +174,52 @@ class CommandRouter:
         add_tag_to_sample(sample_id, tag)
 
         return f"Tag '{tag}' added to sample {sample_id}"
+
+    # --------------------------------------------------
+
+    def untag_sample(self, args):
+
+        if len(args) < 2:
+            raise ValueError("untag requires: sample_id tag")
+
+        sample_id = int(args[0])
+        tag = args[1]
+
+        remove_tag_from_sample(sample_id, tag)
+
+        return f"Tag '{tag}' removed from sample {sample_id}"
+
+    # --------------------------------------------------
+
+    def list_tags(self):
+
+        tags = get_all_tags()
+
+        if not tags:
+            return "No tags created yet."
+
+        return ", ".join(tags)
+
+    # --------------------------------------------------
+
+    def bulk_tag(self, args):
+        """
+        bulk-tag <query> <tag>
+        Note: This is a simplified version. TUI handles complex parsing.
+        """
+        if len(args) < 2:
+            raise ValueError("bulk-tag requires: query tag")
+
+        query = args[0]
+        tag = args[1]
+
+        # Use search_samples with simple query
+        samples = search_samples({"query": query})
+
+        for s in samples:
+            add_tag_to_sample(s["id"], tag)
+
+        return f"Added tag '{tag}' to {len(samples)} samples matching '{query}'."
 
     # --------------------------------------------------
 

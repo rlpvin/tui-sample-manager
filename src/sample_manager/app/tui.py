@@ -25,6 +25,7 @@ class HelpScreen(Screen):
                 "List Controls:\n"
                 "Arrows  - Navigate samples\n"
                 "t       - Add Tag to focused sample\n"
+                "untag <id> <tag> - Remove Tag\n"
                 "r       - Add Rating to focused sample\n"
                 "/       - Search within list\n\n"
                 "Commands (enter in input area):\n\n"
@@ -34,6 +35,9 @@ class HelpScreen(Screen):
                 "add-dir <path>- Register a new directory\n"
                 "rm-dir <path> - Unregister a directory\n"
                 "tag <id> <tag>- Add a tag to a sample\n"
+                "untag <id> <t>- Remove a tag from a sample\n"
+                "bulk-tag <q> <t>- Add tag to all results of search <q>\n"
+                "tags          - List all tags\n"
                 "rate <id> <1-5>- Rate a sample\n"
                 "stats         - Show database statistics\n",
                 id="help_text"
@@ -387,6 +391,18 @@ class SampleManagerApp(App):
             self.perform_search(query)
             return
         
+        # Handle bulk-tag separately to use advanced parser if needed
+        if first_word == "bulk-tag":
+            parts = cmd_text.split(None, 2)
+            if len(parts) >= 3:
+                query = parts[1]
+                tag = parts[2]
+                self.perform_bulk_tag(query, tag)
+                return
+            else:
+                self.log_result("Error: bulk-tag requires <query> <tag>")
+                return
+        
         # Auto-detect filtering if it contains a colon and isn't a known command
         if ":" in cmd_text and first_word not in base_commands:
             self.perform_search(cmd_text)
@@ -468,6 +484,49 @@ class SampleManagerApp(App):
         
         filter_summary = ", ".join([f"{k}:{v}" for k,v in filters.items()])
         self.log_result(f"Search results for [{filter_summary}] (Sort: {sort_by}): {len(results)}")
+
+    def perform_bulk_tag(self, query: str, tag: str) -> None:
+        """Apply a tag to all samples matching a query."""
+        # Use our existing complex parser logic via a helper or just re-parse
+        # For simplicity, we'll re-parse or use the perform_search logic
+        
+        # We need results, so let's extract the parsing logic if we had time, 
+        # but for now we'll just run search_samples with the filters.
+        
+        # Re-use parsing logic (ideally this should be a static method)
+        filters = {}
+        parts = query.split()
+        remaining_query = []
+        for part in parts:
+            part = part.strip(",")
+            if ":" in part:
+                key, val = part.split(":", 1)
+                # ... rating/type/tag logic ...
+                # (Duplicating for now, refactoring later)
+                if key == "tag": filters["tag"] = val
+                elif key == "type": filters["type"] = val
+                elif key == "rating":
+                    import re
+                    match = re.match(r"([><=]{1,2})?(\d)", val)
+                    if match:
+                        op = match.group(1) or "="
+                        filters["rating"] = (op, int(match.group(2)))
+            else:
+                remaining_query.append(part)
+        if remaining_query:
+            filters["query"] = " ".join(remaining_query)
+
+        results = search_samples(filters)
+        if not results:
+            self.log_result(f"No samples found matching '{query}'. Bulk tag aborted.")
+            return
+
+        from sample_manager.db.tag_repository import add_tag_to_sample
+        for s in results:
+            add_tag_to_sample(s["id"], tag)
+        
+        self.log_result(f"Bulk tagged {len(results)} samples with '{tag}'.")
+        self.action_refresh_samples()
 
 if __name__ == "__main__":
     app = SampleManagerApp()
