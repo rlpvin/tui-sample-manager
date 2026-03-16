@@ -3,6 +3,7 @@ from sample_manager.db.sample_repository import bulk_create_samples
 from sample_manager.scanner.directories import get_registered_directories
 from sample_manager.scanner.file_scanner import scan_directory
 from sample_manager.scanner.metadata import extract_metadata
+from sample_manager.utils.hashing import calculate_hash
 
 
 def index_samples():
@@ -18,7 +19,8 @@ def index_samples():
                 "path": meta["path"],
                 "filename": meta["filename"],
                 "extension": meta["extension"],
-                "size": meta["size"]
+                "size": meta["size"],
+                "hash": calculate_hash(path)
             })
 
     if all_metadata:

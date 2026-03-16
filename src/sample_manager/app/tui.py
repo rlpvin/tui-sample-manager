@@ -8,7 +8,13 @@ from textual.screen import Screen
 from textual import on
 
 from sample_manager.app.controller import ApplicationController
-from sample_manager.db.sample_repository import get_all_samples, search_samples, get_sample_by_id
+from sample_manager.db.sample_repository import (
+    get_all_samples, 
+    search_samples, 
+    get_sample_by_id, 
+    get_duplicates_grouped, 
+    delete_sample
+)
 from sample_manager.utils.playback import Player
 
 class HelpScreen(Screen):
@@ -39,6 +45,7 @@ class HelpScreen(Screen):
                 "tags              - List all available tags\n"
                 "rate <id> <1-5>   - Rate a sample\n"
                 "unrate <id>       - Remove rating from a sample\n"
+                "duplicates        - Find and manage duplicate samples\n"
                 "stats             - Show database statistics\n\n"
                 "Advanced Filtering (works in Search or Command Modal):\n\n"
                 "tag:<name>        - Filter by tag\n"
@@ -46,6 +53,7 @@ class HelpScreen(Screen):
                 "rating:<[><=]val> - Filter by rating (e.g., rating:>3)\n"
                 "sort:<field>      - Sort (filename, rating, bpm, date)\n"
                 "                    Use '-' for descending (e.g., sort:-bpm)\n"
+                "Duplicates: type 'duplicates' to open the cleanup tool.\n\n"
                 "Example: tag:kick type:wav rating:>3 search heavy\n",
                 id="help_text"
             ),
@@ -179,8 +187,9 @@ class CommandScreen(ModalScreen):
 
     @on(Input.Submitted)
     def handle_submit(self, event: Input.Submitted) -> None:
-        self.app.handle_command_text(event.value)
+        cmd = event.value
         self.app.pop_screen()
+        self.app.handle_command_text(cmd)
 
     def on_key(self, event) -> None:
         if event.key == "escape":
@@ -238,6 +247,49 @@ class SampleManagerApp(App):
         background: #24283b;
         color: #9ece6a;
         overflow-y: scroll;
+    }
+
+    /* Duplicates Cleanup Tool */
+    DuplicatesScreen {
+        align: center middle;
+    }
+
+    #duplicates_container {
+        width: 90%;
+        height: 90%;
+        background: #1a1b26;
+        border: thick #7aa2f7;
+        padding: 1;
+    }
+
+    #duplicates_title {
+        width: 100%;
+        content-align: center middle;
+        text-style: bold;
+        color: #7aa2f7;
+        padding: 1;
+    }
+
+    #duplicates_desc {
+        padding: 0 1 1 1;
+        color: #c0caf5;
+    }
+
+    #duplicates_list {
+        height: 1fr;
+        border: solid #414868;
+    }
+
+    #duplicates_footer {
+        height: auto;
+        background: #24283b;
+        color: #bb9af7;
+        padding: 0 1;
+    }
+
+    #duplicates_help {
+        width: 100%;
+        text-align: center;
     }
 
     #help_container {
@@ -437,7 +489,7 @@ class SampleManagerApp(App):
             return
 
         # Known base commands
-        base_commands = {"scan", "rescan", "list", "dirs", "add-dir", "rm-dir", "tag", "rate", "stats", "search"}
+        base_commands = {"scan", "rescan", "list", "dirs", "add-dir", "rm-dir", "tag", "rate", "stats", "search", "duplicates"}
         first_word = cmd_text.split()[0].lower() if cmd_text.split() else ""
 
         # Intercept search for better UI experience
@@ -463,11 +515,16 @@ class SampleManagerApp(App):
             self.perform_search(cmd_text)
             return
 
+        if cmd_text.lower() == "duplicates":
+            self.push_screen(DuplicatesScreen())
+            return
+
         # Handle other commands via controller
         result = self.controller.handle_input(cmd_text)
         self.log_result(result)
         
         # If command might change data, refresh list
+
         if any(keyword in cmd_text.lower() for keyword in ("scan", "tag", "rate", "unrate", "rm-dir")):
             self.action_refresh_samples()
 
@@ -582,6 +639,81 @@ class SampleManagerApp(App):
         
         self.log_result(f"Bulk tagged {len(results)} samples with '{tag}'.")
         self.action_refresh_samples()
+
+class DuplicatesScreen(ModalScreen):
+    """Screen for managing duplicate samples."""
+
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static("Duplicate Detection & Cleanup", id="duplicates_title"),
+            Static("Scanning for bit-for-bit identical files...", id="duplicates_desc"),
+            DataTable(id="duplicates_list"),
+            Horizontal(
+                Static("Press 'd' to delete selected file, 'Esc' to close", id="duplicates_help"),
+                id="duplicates_footer"
+            ),
+            id="duplicates_container"
+        )
+
+    def on_mount(self) -> None:
+        table = self.query_one("#duplicates_list", DataTable)
+        table.add_columns("ID", "Filename", "Path", "Tags", "Rating")
+        table.cursor_type = "row"
+        self.refresh_duplicates()
+
+    def refresh_duplicates(self) -> None:
+        table = self.query_one("#duplicates_list", DataTable)
+        table.clear()
+        
+        duplicate_groups = get_duplicates_grouped()
+        
+        if not duplicate_groups:
+            self.app.notify("No duplicates found!", severity="information")
+            self.dismiss()
+            return
+            
+        self.query_one("#duplicates_desc", Static).update(
+            f"Found {len(duplicate_groups)} groups of identical files. "
+            "Highlight a file and press 'd' to safely remove it from the database."
+        )
+        self.app.notify(f"Loaded {len(duplicate_groups)} duplicate groups.")
+
+        for group in duplicate_groups:
+            # Add a separator row for each hash group
+            table.add_row("---", f"Group: {group['hash'][:8]}...", "---", "---", "---")
+            for s in group["samples"]:
+                table.add_row(
+                    str(s["id"]),
+                    s["filename"],
+                    s["path"],
+                    s["tags"] or "",
+                    str(s["rating"]) if s["rating"] else ""
+                )
+
+    def on_key(self, event) -> None:
+        if event.key == "d":
+            table = self.query_one("#duplicates_list", DataTable)
+            row_key = table.cursor_row
+            if row_key is not None:
+                row_data = table.get_row_at(row_key)
+                sample_id = row_data[0]
+                if sample_id == "---":
+                    return
+                
+                self.app.push_screen(
+                    InputDialog(f"Are you sure you want to delete sample {sample_id}?", placeholder="Type 'YES' to confirm", callback=lambda val: self.confirm_delete(sample_id, val))
+                )
+        elif event.key == "escape":
+            self.dismiss()
+
+    def confirm_delete(self, sample_id, confirmation):
+        if confirmation == "YES":
+            try:
+                delete_sample(sample_id)
+                self.app.notify(f"Sample {sample_id} removed from database.")
+                self.refresh_duplicates()
+            except Exception as e:
+                self.app.notify(f"Error deleting: {e}", severity="error")
 
 if __name__ == "__main__":
     app = SampleManagerApp()

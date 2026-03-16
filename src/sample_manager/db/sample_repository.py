@@ -1,16 +1,16 @@
 from sample_manager.db.connection import get_connection
 
 
-def create_sample(path, filename, extension, size):
+def create_sample(path, filename, extension, size, hash_val=None):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         """
-        INSERT OR IGNORE INTO samples (path, filename, extension, size)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO samples (path, filename, extension, size, hash)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (path, filename, extension, size),
+        (path, filename, extension, size, hash_val),
     )
 
     conn.commit()
@@ -61,22 +61,63 @@ def delete_sample(sample_id):
     conn.commit()
 
 
+def get_duplicates_grouped():
+    """
+    Get groups of samples that share the same hash.
+    Only returns hashes that appear more than once.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT hash, COUNT(*) as count
+        FROM samples
+        WHERE hash IS NOT NULL AND hash != ''
+        GROUP BY hash
+        HAVING count > 1
+        """
+    )
+    duplicate_hashes = cursor.fetchall()
+
+    groups = []
+    for row in duplicate_hashes:
+        h = row["hash"]
+        cursor.execute(
+            """
+            SELECT s.*, r.rating, GROUP_CONCAT(t.name, ', ') as tags
+            FROM samples s
+            LEFT JOIN sample_tags st ON s.id = st.sample_id
+            LEFT JOIN tags t ON st.tag_id = t.id
+            LEFT JOIN ratings r ON s.id = r.sample_id
+            WHERE s.hash = ?
+            GROUP BY s.id
+            """,
+            (h,),
+        )
+        samples = cursor.fetchall()
+        groups.append({"hash": h, "samples": samples})
+
+    return groups
+
+
 def bulk_create_samples(samples_list):
     conn = get_connection()
     cursor = conn.cursor()
     
     data_to_insert = [
-        (s["path"], s["filename"], s["extension"], s["size"])
+        (s["path"], s["filename"], s["extension"], s["size"], s.get("hash"))
         for s in samples_list
     ]
     
     cursor.executemany(
         """
-        INSERT INTO samples (path, filename, extension, size)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO samples (path, filename, extension, size, hash)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(path) DO UPDATE SET
             size = excluded.size,
-            filename = excluded.filename
+            filename = excluded.filename,
+            hash = excluded.hash
         """,
         data_to_insert
     )
