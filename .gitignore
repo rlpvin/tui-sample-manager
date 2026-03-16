@@ -10,6 +10,8 @@ env/
 
 # Logs
 logs/
+./**/*.log
+*.log
 
 # Database
 data/
