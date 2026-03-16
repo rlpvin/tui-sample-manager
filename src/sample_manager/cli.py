@@ -34,3 +34,8 @@ def main():
         reindex()
         print("Scan completed.")
         return
+
+    # No arguments, launch TUI
+    from sample_manager.app.tui import SampleManagerApp
+    app = SampleManagerApp()
+    app.run()

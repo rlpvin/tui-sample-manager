@@ -1,0 +1,448 @@
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Header, Footer, Static, Input, DataTable
+from textual.binding import Binding
+from textual.screen import ModalScreen
+from textual.screen import Screen
+from textual import on
+
+from sample_manager.app.controller import ApplicationController
+from sample_manager.db.sample_repository import get_all_samples, search_samples
+
+class HelpScreen(Screen):
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("Sample Manager Help", id="help_title"),
+            Static(
+                "Keyboard Shortcuts:\n\n"
+                "q       - Quit Application\n"
+                "s       - Refetch/Refresh samples\n"
+                "f       - Focus Search/Command Input\n"
+                "l       - Toggle Full-Screen List View\n"
+                "h       - Toggle this help screen\n"
+                "c       - Clear results panel\n\n"
+                "List Controls:\n"
+                "Arrows  - Navigate samples\n"
+                "t       - Add Tag to focused sample\n"
+                "r       - Add Rating to focused sample\n"
+                "/       - Search within list\n\n"
+                "Commands (enter in input area):\n\n"
+                "scan          - Scan registered directories for new samples\n"
+                "rescan        - Full reindex (checks for deleted files)\n"
+                "search <text> - Search samples by name or extension\n"
+                "add-dir <path>- Register a new directory\n"
+                "rm-dir <path> - Unregister a directory\n"
+                "tag <id> <tag>- Add a tag to a sample\n"
+                "rate <id> <1-5>- Rate a sample\n"
+                "stats         - Show database statistics\n",
+                id="help_text"
+            ),
+            Static("Press any key to close", id="help_footer"),
+            id="help_container"
+        )
+
+    def on_mount(self) -> None:
+        self.styles.background = "rgba(0,0,0,0.8)"
+
+    def on_key(self) -> None:
+        self.app.pop_screen()
+
+class InputDialog(ModalScreen):
+    """A modal dialog to get text input."""
+    
+    def __init__(self, title: str, placeholder: str = "", callback=None):
+        super().__init__()
+        self.title_text = title
+        self.placeholder = placeholder
+        self.callback = callback
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static(self.title_text, id="dialog_title"),
+            Input(placeholder=self.placeholder, id="dialog_input"),
+            Static("Press Enter to submit, Escape to cancel", id="dialog_footer"),
+            id="dialog_container"
+        )
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    @on(Input.Submitted)
+    def handle_submit(self, event: Input.Submitted) -> None:
+        if self.callback:
+            self.callback(event.value)
+        self.app.pop_screen()
+
+    def on_key(self, event) -> None:
+        if event.key == "escape":
+            self.app.pop_screen()
+
+class SampleTable(DataTable):
+    """A specialized DataTable for samples with extra shortcuts."""
+    
+    BINDINGS = [
+        Binding("t", "add_tag", "Add Tag", show=False),
+        Binding("r", "add_rating", "Add Rating", show=False),
+        Binding("/", "search", "Search", show=False),
+    ]
+
+    def action_search(self) -> None:
+        self.app.prompt_search()
+
+    def action_add_tag(self) -> None:
+        row_key = self.cursor_row
+        if row_key is not None:
+            # Get ID from first column
+            row_data = self.get_row_at(row_key)
+            sample_id = row_data[0]
+            self.app.prompt_tag(sample_id)
+
+    def action_add_rating(self) -> None:
+        row_key = self.cursor_row
+        if row_key is not None:
+            # Get ID from first column
+            row_data = self.get_row_at(row_key)
+            sample_id = row_data[0]
+            self.app.prompt_rating(sample_id)
+
+class SampleListScreen(Screen):
+    """A full-screen view of the sample list."""
+    
+    BINDINGS = [
+        Binding("l", "app.pop_screen", "Back to Dashboard"),
+        Binding("escape", "app.pop_screen", "Back to Dashboard"),
+        Binding("s", "refresh_samples", "Refresh"),
+        Binding("f", "show_command_bar", "Command"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield SampleTable(id="full_sample_list")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one(SampleTable)
+        table.add_columns("ID", "Filename", "Tags", "Rating")
+        table.cursor_type = "row"
+        table.focus()
+        self.action_refresh_samples()
+
+    def action_refresh_samples(self) -> None:
+        table = self.query_one(SampleTable)
+        table.clear()
+        samples = get_all_samples()
+        for s in samples:
+            table.add_row(
+                str(s["id"]),
+                s["filename"],
+                s["tags"] or "",
+                str(s["rating"]) if s["rating"] is not None else ""
+            )
+
+    def action_show_command_bar(self) -> None:
+        self.app.action_show_command_bar()
+
+class CommandScreen(ModalScreen):
+    """A modal screen for entering commands at the top."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="command_dialog_container"):
+            yield Static("Enter Command / Search:", id="command_title")
+            yield Input(placeholder="e.g., search kick, scan, tag 1 drum...", id="command_input")
+            yield Static("Press Enter to run, Escape to cancel", id="command_footer")
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    @on(Input.Submitted)
+    def handle_submit(self, event: Input.Submitted) -> None:
+        self.app.handle_command_text(event.value)
+        self.app.pop_screen()
+
+    def on_key(self, event) -> None:
+        if event.key == "escape":
+            self.app.pop_screen()
+
+class SampleManagerApp(App):
+    CSS = """
+    Screen {
+        background: #1a1b26;
+        color: #c0caf5;
+    }
+
+    #main_container {
+        height: 100%;
+        width: 100%;
+    }
+
+    SampleTable {
+        height: 1fr;
+        border: solid #414868;
+        background: #1a1b26;
+    }
+
+    SampleTable > .datatable--header {
+        background: #24283b;
+        color: #7aa2f7;
+        text-style: bold;
+    }
+
+    SampleTable > .datatable--cursor {
+        background: #364a82;
+    }
+
+    #input_area {
+        height: auto;
+        border: solid #414868;
+        padding: 0 1;
+        background: #24283b;
+    }
+
+    Input {
+        background: #1a1b26;
+        border: none;
+        color: #c0caf5;
+    }
+
+    Input:focus {
+        border: none;
+    }
+
+    #results_panel {
+        height: 8;
+        border: solid #414868;
+        padding: 0 1;
+        background: #24283b;
+        color: #9ece6a;
+        overflow-y: scroll;
+    }
+
+    #help_container {
+        align: center middle;
+        width: 60;
+        height: 35;
+        border: double #7aa2f7;
+        background: #1a1b26;
+        padding: 1 2;
+    }
+
+    #help_title {
+        text-align: center;
+        text-style: bold;
+        color: #7aa2f7;
+        margin-bottom: 1;
+    }
+
+    #help_footer {
+        text-align: center;
+        color: #565f89;
+        margin-top: 1;
+    }
+
+    #dialog_container {
+        align: center middle;
+        width: 50;
+        height: auto;
+        border: double #7aa2f7;
+        background: #1a1b26;
+        padding: 1 2;
+        margin: 2;
+    }
+
+    #dialog_title {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #dialog_footer {
+        text-align: center;
+        color: #565f89;
+        margin-top: 1;
+    }
+
+    #command_dialog_container {
+        dock: top;
+        width: 100%;
+        height: auto;
+        background: #24283b;
+        border-bottom: solid #7aa2f7;
+        padding: 0 1;
+    }
+
+    #command_title {
+        text-style: bold;
+        color: #7aa2f7;
+    }
+
+    #command_input {
+        background: #1a1b26;
+        border: none;
+        color: #c0caf5;
+    }
+
+    #command_footer {
+        color: #565f89;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "quit", "Quit"),
+        Binding("s", "refresh_samples", "Refresh"),
+        Binding("f", "show_command_bar", "Command"),
+        Binding("l", "show_list", "Full List"),
+        Binding("h", "show_help", "Help"),
+        Binding("c", "clear_results", "Clear Output"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.controller = ApplicationController()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Container(id="main_container"):
+            yield SampleTable(id="sample_list")
+            with Vertical(id="results_panel"):
+                yield Static("System Output:", id="output_header")
+                yield Static("", id="output_text")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one("#sample_list", SampleTable)
+        table.add_columns("ID", "Filename", "Tags", "Rating")
+        table.cursor_type = "row"
+        self.action_refresh_samples()
+
+    def action_refresh_samples(self) -> None:
+        """Fetch all samples and update the table."""
+        try:
+            table = self.query_one("SampleTable")
+        except:
+             return
+             
+        table.clear()
+        samples = get_all_samples()
+        for s in samples:
+            table.add_row(
+                str(s["id"]),
+                s["filename"],
+                s["tags"] or "",
+                str(s["rating"]) if s["rating"] is not None else ""
+            )
+        self.log_result(f"Loaded {len(samples)} samples.")
+
+    def action_focus_input(self) -> None:
+        self.query_one(Input).focus()
+
+    def action_show_help(self) -> None:
+        self.push_screen(HelpScreen())
+
+    def action_show_list(self) -> None:
+        self.push_screen(SampleListScreen())
+
+    def action_clear_results(self) -> None:
+        self.query_one("#output_text", Static).update("")
+        self._log_history = []
+
+    def log_result(self, message: str) -> None:
+        """Update the results panel with a message."""
+        try:
+            output = self.query_one("#output_text", Static)
+        except:
+            return
+            
+        if not hasattr(self, "_log_history"):
+            self._log_history = []
+        self._log_history.append(f"> {message}")
+        # Keep only the last 50 messages
+        self._log_history = self._log_history[-50:]
+        output.update("\n".join(self._log_history))
+        # Auto-scroll the container to the bottom
+        output.parent.scroll_end(animate=False)
+
+    def prompt_tag(self, sample_id: str) -> None:
+        def handle_tag(tag_name: str):
+            if tag_name.strip():
+                result = self.controller.handle_input(f"tag {sample_id} {tag_name}")
+                self.log_result(result)
+                self.action_refresh_samples()
+        
+        self.push_screen(InputDialog(f"Add Tag to sample {sample_id}", "Enter tag name...", handle_tag))
+
+    def prompt_rating(self, sample_id: str) -> None:
+        def handle_rating(rating: str):
+            if rating.strip():
+                try:
+                    val = int(rating)
+                    result = self.controller.handle_input(f"rate {sample_id} {val}")
+                    self.log_result(result)
+                    self.action_refresh_samples()
+                except ValueError:
+                    self.log_result("Error: Rating must be a number 1-5")
+        
+        self.push_screen(InputDialog(f"Rate sample {sample_id} (1-5)", "Enter rating...", handle_rating))
+
+    def prompt_search(self) -> None:
+        def handle_search(query: str):
+            if query.strip():
+                self.perform_search(query)
+        
+        self.push_screen(InputDialog("Search Samples", "Enter search query...", handle_search))
+
+    def action_show_command_bar(self) -> None:
+        self.push_screen(CommandScreen())
+
+    def handle_command_text(self, cmd_text: str) -> None:
+        cmd_text = cmd_text.strip()
+        if not cmd_text:
+            return
+
+        # Intercept search for better UI experience
+        if cmd_text.startswith("search "):
+            query = cmd_text[7:].strip()
+            self.perform_search(query)
+            return
+
+        # Handle other commands via controller
+        result = self.controller.handle_input(cmd_text)
+        self.log_result(result)
+        
+        # If command might change data, refresh list
+        if any(keyword in cmd_text.lower() for keyword in ("scan", "tag", "rate", "rm-dir")):
+            self.action_refresh_samples()
+
+    @on(Input.Submitted)
+    def handle_command(self, event: Input.Submitted) -> None:
+        # This is for any Inputs in the app that might submit
+        # But our main one is in CommandScreen now.
+        pass
+
+    def perform_search(self, query: str) -> None:
+        # Find the active table (could be on the main screen or a pushed screen)
+        target_table = None
+        for screen in reversed(self.screen_stack):
+            try:
+                target_table = screen.query_one(SampleTable)
+                break
+            except:
+                continue
+
+        if not target_table:
+            return
+             
+        target_table.clear()
+        results = search_samples(query)
+        for s in results:
+            target_table.add_row(
+                str(s["id"]),
+                s["filename"],
+                s["tags"] or "",
+                str(s["rating"]) if s["rating"] is not None else ""
+            )
+        self.log_result(f"Search for '{query}' found {len(results)} samples.")
+
+if __name__ == "__main__":
+    app = SampleManagerApp()
+    app.run()
