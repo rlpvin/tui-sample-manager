@@ -3,6 +3,9 @@ import numpy as np
 import os
 from pathlib import Path
 import warnings
+from sample_manager.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Suppress librosa/audioread warnings for clean TUI output
 warnings.filterwarnings("ignore")
@@ -28,7 +31,10 @@ def analyze_audio(file_path: str):
     Perform deep analysis of an audio file to extract BPM, Key, and Duration.
     """
     if not os.path.exists(file_path):
+        logger.warning(f"Analysis failed: File does not exist: {file_path}")
         return None
+
+    logger.debug(f"Starting audio analysis for: {file_path}")
 
     try:
         # 1. Duration (fastest)
@@ -104,13 +110,16 @@ def analyze_audio(file_path: str):
                 best_corr = minor_corr
                 best_key = f"{keys[i]} Minor"
 
-        return {
+        result = {
             "bpm": bpm,
             "key": best_key,
             "duration": round(duration, 2)
         }
+        logger.debug(f"Analysis complete for {os.path.basename(file_path)}: {result}")
+        return result
 
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error analyzing audio {file_path}: {e}", exc_info=True)
         # Fallback for unsupported files or errors
         return {
             "bpm": 0,

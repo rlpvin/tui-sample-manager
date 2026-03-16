@@ -1,5 +1,8 @@
 import sqlite3
 from sample_manager.db.connection import get_connection
+from sample_manager.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_sample(path, filename, extension, size, hash_val=None, bpm=0, musical_key=None, duration=0):
@@ -16,6 +19,7 @@ def create_sample(path, filename, extension, size, hash_val=None, bpm=0, musical
         )
         conn.commit()
     except sqlite3.Error as e:
+        logger.error(f"Database error in create_sample: {e}", exc_info=True)
         conn.rollback()
         raise e
 
@@ -134,6 +138,7 @@ def bulk_create_samples(samples_list):
         )
         conn.commit()
     except sqlite3.Error as e:
+        logger.error(f"Database error in bulk_create_samples: {e}", exc_info=True)
         conn.rollback()
         raise e
 

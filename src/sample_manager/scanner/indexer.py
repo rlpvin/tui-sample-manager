@@ -4,6 +4,9 @@ from sample_manager.scanner.directories import get_registered_directories
 from sample_manager.scanner.file_scanner import scan_directory
 from sample_manager.scanner.metadata import extract_metadata
 from sample_manager.utils.hashing import calculate_hash
+from sample_manager.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def index_samples(analyze: bool = False):
@@ -11,7 +14,7 @@ def index_samples(analyze: bool = False):
     all_metadata = []
 
     for directory in directories:
-        print(f"Scanning: {directory} (Deep Analysis: {analyze})")
+        logger.info(f"Scanning directory: {directory} (Deep Analysis: {analyze})")
         for path in scan_directory(directory):
             meta = extract_metadata(path, analyze=analyze)
             # Store with all fields
@@ -28,7 +31,7 @@ def index_samples(analyze: bool = False):
 
     if all_metadata:
         bulk_create_samples(all_metadata)
-        print(f"Successfully indexed {len(all_metadata)} samples.")
+        logger.info(f"Successfully indexed {len(all_metadata)} samples.")
 
 def remove_deleted_files():
     """
