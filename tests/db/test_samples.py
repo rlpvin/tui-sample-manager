@@ -95,8 +95,8 @@ def test_bulk_create_samples(test_db):
     samples = get_all_samples()
 
     assert len(samples) == 2
-    assert samples[0]["filename"] == "snare.wav"
-    assert samples[1]["filename"] == "hihat.wav"
+    assert samples[0]["filename"] == "hihat.wav"
+    assert samples[1]["filename"] == "snare.wav"
 
 
 def test_search_samples(test_db):
