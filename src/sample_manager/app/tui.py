@@ -123,22 +123,13 @@ class SampleListScreen(Screen):
 
     def on_mount(self) -> None:
         table = self.query_one(SampleTable)
-        table.add_columns("ID", "Filename", "Tags", "Rating")
+        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Date")
         table.cursor_type = "row"
         table.focus()
-        self.action_refresh_samples()
+        self.app.action_refresh_samples()
 
     def action_refresh_samples(self) -> None:
-        table = self.query_one(SampleTable)
-        table.clear()
-        samples = get_all_samples()
-        for s in samples:
-            table.add_row(
-                str(s["id"]),
-                s["filename"],
-                s["tags"] or "",
-                str(s["rating"]) if s["rating"] is not None else ""
-            )
+        self.app.action_refresh_samples()
 
     def action_show_command_bar(self) -> None:
         self.app.action_show_command_bar()
@@ -299,6 +290,7 @@ class SampleManagerApp(App):
     def __init__(self):
         super().__init__()
         self.controller = ApplicationController()
+        self.last_query = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -311,27 +303,13 @@ class SampleManagerApp(App):
 
     def on_mount(self) -> None:
         table = self.query_one("#sample_list", SampleTable)
-        table.add_columns("ID", "Filename", "Tags", "Rating")
+        table.add_columns("ID", "Filename", "Tags", "Rating", "BPM", "Date")
         table.cursor_type = "row"
         self.action_refresh_samples()
 
     def action_refresh_samples(self) -> None:
-        """Fetch all samples and update the table."""
-        try:
-            table = self.query_one("SampleTable")
-        except:
-             return
-             
-        table.clear()
-        samples = get_all_samples()
-        for s in samples:
-            table.add_row(
-                str(s["id"]),
-                s["filename"],
-                s["tags"] or "",
-                str(s["rating"]) if s["rating"] is not None else ""
-            )
-        self.log_result(f"Loaded {len(samples)} samples.")
+        """Fetch samples based on last query and update the active table."""
+        self.perform_search(self.last_query)
 
     def action_focus_input(self) -> None:
         self.query_one(Input).focus()
@@ -399,10 +377,19 @@ class SampleManagerApp(App):
         if not cmd_text:
             return
 
+        # Known base commands
+        base_commands = {"scan", "rescan", "list", "dirs", "add-dir", "rm-dir", "tag", "rate", "stats", "search"}
+        first_word = cmd_text.split()[0].lower() if cmd_text.split() else ""
+
         # Intercept search for better UI experience
-        if cmd_text.startswith("search "):
+        if first_word == "search":
             query = cmd_text[7:].strip()
             self.perform_search(query)
+            return
+        
+        # Auto-detect filtering if it contains a colon and isn't a known command
+        if ":" in cmd_text and first_word not in base_commands:
+            self.perform_search(cmd_text)
             return
 
         # Handle other commands via controller
@@ -420,6 +407,41 @@ class SampleManagerApp(App):
         pass
 
     def perform_search(self, query: str) -> None:
+        self.last_query = query
+        # Complex parser for query
+        filters = {}
+        sort_by = "filename"
+        sort_order = "ASC"
+
+        parts = query.split()
+        remaining_query = []
+
+        for part in parts:
+            part = part.strip(",") # Handle tag:kick, etc
+            if ":" in part:
+                key, val = part.split(":", 1)
+                if key == "tag":
+                    filters["tag"] = val
+                elif key == "type":
+                    filters["type"] = val
+                elif key == "rating":
+                    # Handle rating:>3 etc
+                    import re
+                    match = re.match(r"([><=]{1,2})?(\d)", val)
+                    if match:
+                        op = match.group(1) or "="
+                        filters["rating"] = (op, int(match.group(2)))
+                elif key == "sort":
+                    sort_by = val.lower()
+                    if sort_by.startswith("-"):
+                        sort_by = sort_by[1:]
+                        sort_order = "DESC"
+            else:
+                remaining_query.append(part)
+        
+        if remaining_query:
+            filters["query"] = " ".join(remaining_query)
+
         # Find the active table (could be on the main screen or a pushed screen)
         target_table = None
         for screen in reversed(self.screen_stack):
@@ -433,15 +455,19 @@ class SampleManagerApp(App):
             return
              
         target_table.clear()
-        results = search_samples(query)
+        results = search_samples(filters, sort_by=sort_by, sort_order=sort_order)
         for s in results:
             target_table.add_row(
                 str(s["id"]),
                 s["filename"],
                 s["tags"] or "",
-                str(s["rating"]) if s["rating"] is not None else ""
+                str(s["rating"]) if s["rating"] is not None else "",
+                str(s["bpm"]) if s["bpm"] is not None else "",
+                s["created_at"][:10] if s["created_at"] else ""
             )
-        self.log_result(f"Search for '{query}' found {len(results)} samples.")
+        
+        filter_summary = ", ".join([f"{k}:{v}" for k,v in filters.items()])
+        self.log_result(f"Search results for [{filter_summary}] (Sort: {sort_by}): {len(results)}")
 
 if __name__ == "__main__":
     app = SampleManagerApp()

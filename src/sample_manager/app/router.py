@@ -141,7 +141,7 @@ class CommandRouter:
 
         query = args[0].lower()
 
-        results = search_samples(query)
+        results = search_samples({"query": query})
 
         if not results:
             return "No samples found."
