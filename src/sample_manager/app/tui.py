@@ -21,52 +21,59 @@ from sample_manager.utils.batch import BatchProcessor
 class HelpScreen(Screen):
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
-            Static("Sample Manager Help", id="help_title"),
-            Static(
-                "Keyboard Shortcuts:\n\n"
-                "q           - Quit Application\n"
-                "s           - Refresh samples (maintains filters)\n"
-                "f           - Focus Command / Search Modal\n"
-                "l           - Toggle Full-Screen List View\n"
-                "h           - Toggle this help screen\n"
-                "c           - Clear results panel output\n\n"
-                "List Shortcuts (when list focused):\n"
-                "Arrows      - Navigate samples\n"
-                "Space       - Play / Stop focused sample\n"
-                "t           - Add Tag to selected sample\n"
-                "r           - Add Rating to selected sample\n"
-                "/           - Quick search dialog\n\n"
-                "Commands (enter in Command Modal 'f'):\n\n"
-                "scan              - Scan for new samples\n"
-                "search <text>     - Search samples by name\n"
-                "tag <id> <tag>    - Add tag to a sample\n"
-                "untag <id> <tag>  - Remove tag from a sample\n"
-                "tags              - List all available tags\n"
-                "rate <id> <1-5>   - Rate a sample\n"
-                "unrate <id>       - Remove rating from a sample\n"
-                "bulk-tag <q> <t>  - Tag all samples matching query\n"
-                "bulk-rename <q> <p,r> - Rename samples matching query\n"
-                "bulk-convert <q> <ext> - Convert samples matching query\n"
-                "bulk-normalize <q> [db] - Normalize volume matching query\n"
-                "duplicates        - Find and manage duplicate samples\n"
-                "analyze <id>      - Deep analysis (Key/BPM). Skips one-shots.\n"
-                "scan --analyze    - Library scan with deep analysis enabled\n"
-                "stats             - Show database statistics\n\n"
-                "Advanced Filtering (works in Search or Command Modal):\n\n"
-                "tag:<name>        - Filter by tag\n"
-                "type:<ext>        - Filter by file extension\n"
-                "rating:<[><=]val> - Filter by rating (e.g., rating:>3)\n"
-                "sort:<field>      - Sort (filename, rating, bpm, duration)\n"
-                "                    Use '-' for descending (e.g., sort:-bpm)\n"
-                "Duplicates: type 'duplicates' to open the cleanup tool.\n"
-                "Duration: Shown as '30s' or '1m 20s' (60s+).\n\n"
-                "Example: tag:kick type:wav rating:>3 search heavy\n",
-                id="help_text"
-            ),
-            Static("Press any key to close", id="help_footer"),
-            id="help_container"
-        )
+        with Vertical(id="help_container"):
+            yield Static("Sample Manager Help", id="help_title")
+            with Vertical(id="help_scroll"):
+                yield Static(
+                    "Keyboard Shortcuts:\n\n"
+                    "q           - Quit Application\n"
+                    "s           - Refresh samples (maintains filters)\n"
+                    "f           - Focus Command / Search Modal\n"
+                    "l           - Toggle Full-Screen List View\n"
+                    "h           - Toggle this help screen\n"
+                    "c           - Clear results panel output\n\n"
+                    "List Shortcuts (when list focused):\n"
+                    "Arrows      - Navigate samples\n"
+                    "Space       - Play / Stop focused sample\n"
+                    "t           - Add Tag to selected sample\n"
+                    "r           - Add Rating to selected sample\n"
+                    "/           - Quick search dialog\n\n"
+                    "Commands (enter in Command Modal 'f'):\n\n"
+                    "scan              - Scan for new samples\n"
+                    "search <text>     - Search samples by name\n"
+                    "tag <id> <tag>    - Add tag to a sample\n"
+                    "untag <id> <tag>  - Remove tag from a sample\n"
+                    "tags              - List all available tags\n"
+                    "rate <id> <1-5>   - Rate a sample\n"
+                    "unrate <id>       - Remove rating from a sample\n"
+                    "bulk-tag <q> <t>  - Tag all samples matching query\n"
+                    "bulk-rename <q> <p,r> - Rename samples matching query\n"
+                    "bulk-convert <q> <ext> - Convert samples matching query\n"
+                    "bulk-normalize <q> [db] - Normalize volume matching query\n"
+                    "duplicates        - Find and manage duplicate samples\n"
+                    "analyze <id>      - Deep analysis (Key/BPM). Skips one-shots.\n"
+                    "scan --analyze    - Library scan with deep analysis enabled\n"
+                    "stats             - Show database statistics\n\n"
+                    "Advanced Filtering (Search or Command Modal):\n\n"
+                    "tag:<name>        - Filter by tag\n"
+                    "type:<ext>        - Filter by file extension (wav, mp3...)\n"
+                    "rating:<op><val>  - Rating (e.g., rating:>3, rating:5)\n"
+                    "bpm:<op><val>     - BPM (e.g., bpm:>120, bpm:115)\n"
+                    "key:<key>         - Key (e.g., key:D Minor, key:C#)\n\n"
+                    "Sorting:\n\n"
+                    "sort:<field>      - Sort by: name, rating, bpm, key, duration\n"
+                    "                    Use '-' for descending (e.g., sort:-bpm)\n"
+                    "Interactive Sort  - Click any column header to toggle sort\n\n"
+                    "Example Query:\n"
+                    "tag:kick bpm:>120 type:wav heavy\n\n"
+                    "Playback & Analysis:\n\n"
+                    "Space             - Play/Pause selected sample\n"
+                    "Navigation        - Arrows/PgUp/PgDn automatically plays next\n"
+                    "analyze <id>      - Run deep musical analysis (Key/BPM)\n"
+                    "scan --analyze    - Full scan with deep analysis enabled\n",
+                    id="help_text"
+                )
+            yield Static("Press any key to close", id="help_footer")
 
     def on_mount(self) -> None:
         self.styles.background = "rgba(0,0,0,0.8)"
@@ -292,7 +299,7 @@ class SampleManagerApp(App):
     #help_container {
         align: center middle;
         width: 70;
-        height: 45;
+        height: 80%;
         border: double #7aa2f7;
         background: #1a1b26;
         padding: 1 2;
@@ -305,9 +312,13 @@ class SampleManagerApp(App):
         margin-bottom: 1;
     }
 
-    #help_text {
-        overflow-y: scroll;
+    #help_scroll {
+        overflow-y: auto;
         height: 1fr;
+    }
+
+    #help_text {
+        height: auto;
         margin-bottom: 1;
     }
 
@@ -613,6 +624,14 @@ class SampleManagerApp(App):
                     if match:
                         op = match.group(1) or "="
                         filters["rating"] = (op, int(match.group(2)))
+                elif key == "bpm":
+                    import re
+                    match = re.match(r"([><=]{1,2})?(\d+)", val)
+                    if match:
+                        op = match.group(1) or "="
+                        filters["bpm"] = (op, int(match.group(2)))
+                elif key == "key":
+                    filters["key"] = val
                 elif key == "sort":
                     sort_by = val.lower()
                     if sort_by.startswith("-"):

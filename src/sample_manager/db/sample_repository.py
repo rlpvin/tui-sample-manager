@@ -176,6 +176,16 @@ def search_samples(filters=None, sort_by="filename", sort_order="ASC"):
                 where_clauses.append(f"r.rating {op} ?")
                 params.append(val)
 
+        if "bpm" in filters and filters["bpm"]:
+            op, val = filters["bpm"]
+            if op in (">", "<", "=", ">=", "<="):
+                where_clauses.append(f"s.bpm {op} ?")
+                params.append(val)
+        
+        if "key" in filters and filters["key"]:
+            where_clauses.append("s.musical_key LIKE ?")
+            params.append(f"%{filters['key']}%")
+
     query_str = base_query
     if where_clauses:
         query_str += " WHERE " + " AND ".join(where_clauses)
