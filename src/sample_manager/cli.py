@@ -1,6 +1,7 @@
 """
 CLI entry point for the TUI Sample Manager.
 """
+
 from sample_manager.config import load_config
 from sample_manager.db.init_db import initialize_database
 from sample_manager.db.migrate import run_migrations
@@ -29,7 +30,7 @@ def main():
         register_directory(sys.argv[2])
         print("Directory registered.")
         return
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == "scan":
         reindex()
         print("Scan completed.")
@@ -37,5 +38,6 @@ def main():
 
     # No arguments, launch TUI
     from sample_manager.app.tui import SampleManagerApp
+
     app = SampleManagerApp()
     app.run()

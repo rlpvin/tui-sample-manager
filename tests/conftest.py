@@ -9,12 +9,14 @@ def test_db(monkeypatch):
     conn.row_factory = sqlite3.Row
 
     import sample_manager.db.connection as db_conn
+
     # Reset internal state to ensure fresh start
     monkeypatch.setattr(db_conn, "_connection", conn)
-    
+
     # Also patch anywhere get_connection might have been imported
     import sample_manager.db.init_db as db_init
     import sample_manager.db.migrate as db_migrate
+
     monkeypatch.setattr(db_init, "get_connection", lambda: conn)
     monkeypatch.setattr(db_migrate, "get_connection", lambda: conn)
     monkeypatch.setattr(db_conn, "get_connection", lambda: conn)

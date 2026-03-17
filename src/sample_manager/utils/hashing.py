@@ -1,5 +1,6 @@
 import hashlib
 
+
 def calculate_hash(path: str, chunk_size: int = 8192) -> str:
     """
     Calculate the SHA-256 hash of a file.

@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from pathlib import Path
 
 LOG_FILE = Path("sample_manager.log")
@@ -11,7 +11,7 @@ def setup_logging():
     log_level = getattr(logging, log_level_str, logging.INFO)
 
     handlers = [logging.FileHandler(LOG_FILE)]
-    
+
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",

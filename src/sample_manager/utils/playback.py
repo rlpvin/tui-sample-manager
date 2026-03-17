@@ -1,10 +1,12 @@
-import subprocess
 import os
 import platform
 import signal
+import subprocess
+
 from sample_manager.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
 
 class Player:
     def __init__(self):
@@ -30,12 +32,13 @@ class Player:
             cmd = ["play", "-q", path]
 
         try:
-            # We use start_new_session to ensure it doesn't get signals intended for the TUI
+            # We use start_new_session to ensure it doesn't get signals
+            # intended for the TUI
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                preexec_fn=os.setsid if system != "Windows" else None
+                preexec_fn=os.setsid if system != "Windows" else None,
             )
             return True
         except FileNotFoundError:
@@ -45,7 +48,7 @@ class Player:
                     self.process = subprocess.Popen(
                         ["play", "-q", path],
                         stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
+                        stderr=subprocess.DEVNULL,
                     )
                     return True
                 except FileNotFoundError:
@@ -64,7 +67,7 @@ class Player:
             try:
                 # Send SIGTERM to the process group
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-            except:
+            except Exception:
                 self.process.terminate()
             self.process.wait()
         self.process = None

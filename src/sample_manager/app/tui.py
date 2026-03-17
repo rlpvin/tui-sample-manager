@@ -1,22 +1,22 @@
 import os
-from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Static, Input, DataTable
-from textual.binding import Binding
-from textual.screen import ModalScreen
-from textual.screen import Screen
+
 from textual import on
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical
+from textual.screen import ModalScreen, Screen
+from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from sample_manager.app.controller import ApplicationController
 from sample_manager.db.sample_repository import (
-    get_all_samples, 
-    search_samples, 
-    get_sample_by_id, 
-    get_duplicates_grouped, 
-    delete_sample
+    delete_sample,
+    get_duplicates_grouped,
+    get_sample_by_id,
+    search_samples,
 )
-from sample_manager.utils.playback import Player
 from sample_manager.utils.batch import BatchProcessor
+from sample_manager.utils.playback import Player
+
 
 class HelpScreen(Screen):
 
@@ -71,7 +71,7 @@ class HelpScreen(Screen):
                     "Navigation        - Arrows/PgUp/PgDn automatically plays next\n"
                     "analyze <id>      - Run deep musical analysis (Key/BPM)\n"
                     "scan --analyze    - Full scan with deep analysis enabled\n",
-                    id="help_text"
+                    id="help_text",
                 )
             yield Static("Press any key to close", id="help_footer")
 
@@ -81,9 +81,10 @@ class HelpScreen(Screen):
     def on_key(self) -> None:
         self.app.pop_screen()
 
+
 class ConfirmationDialog(ModalScreen):
     """A modal dialog for Yes/No confirmation."""
-    
+
     def __init__(self, message: str, callback):
         super().__init__()
         self.message = message
@@ -94,9 +95,9 @@ class ConfirmationDialog(ModalScreen):
             Static(self.message, id="dialog_message"),
             Horizontal(
                 Static("Press 'y' for Yes, 'n' or Esc for No", id="dialog_footer"),
-                id="dialog_buttons"
+                id="dialog_buttons",
             ),
-            id="dialog_container"
+            id="dialog_container",
         )
 
     def on_key(self, event) -> None:
@@ -107,9 +108,10 @@ class ConfirmationDialog(ModalScreen):
             self.callback(False)
             self.app.pop_screen()
 
+
 class InputDialog(ModalScreen):
     """A modal dialog to get text input."""
-    
+
     def __init__(self, title: str, placeholder: str = "", callback=None):
         super().__init__()
         self.title_text = title
@@ -121,7 +123,7 @@ class InputDialog(ModalScreen):
             Static(self.title_text, id="dialog_title"),
             Input(placeholder=self.placeholder, id="dialog_input"),
             Static("Press Enter to submit, Escape to cancel", id="dialog_footer"),
-            id="dialog_container"
+            id="dialog_container",
         )
 
     def on_mount(self) -> None:
@@ -137,9 +139,10 @@ class InputDialog(ModalScreen):
         if event.key == "escape":
             self.app.pop_screen()
 
+
 class SampleTable(DataTable):
     """A specialized DataTable for samples with extra shortcuts."""
-    
+
     BINDINGS = [
         Binding("t", "add_tag", "Add Tag", show=False),
         Binding("r", "add_rating", "Add Rating", show=False),
@@ -157,7 +160,10 @@ class SampleTable(DataTable):
 
     @on(DataTable.RowHighlighted)
     def on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Stop playback when moving to a new sample, or auto-play if in audition mode."""
+        """Stop playback when moving to a new sample.
+
+        Also auto-plays if in audition mode.
+        """
         if hasattr(self.app, "player"):
             self.app.player.stop()
             if getattr(self.app, "audition_mode", False):
@@ -180,12 +186,12 @@ class SampleTable(DataTable):
             "Rating": "rating",
             "BPM": "bpm",
             "Key": "key",
-            "Dur": "duration"
+            "Dur": "duration",
         }
-        
+
         column_label = str(event.column_key.value)
         field = label_map.get(column_label)
-        
+
         if field:
             # Toggle direction if clicking same column
             if getattr(self.app, "sort_column", "filename") == field:
@@ -194,7 +200,7 @@ class SampleTable(DataTable):
             else:
                 self.app.sort_column = field
                 self.app.sort_direction = "ASC"
-            
+
             self.app.action_refresh_samples()
 
     def action_add_tag(self) -> None:
@@ -213,9 +219,10 @@ class SampleTable(DataTable):
             sample_id = row_data[0]
             self.app.prompt_rating(sample_id)
 
+
 class SampleListScreen(Screen):
     """A full-screen view of the sample list."""
-    
+
     BINDINGS = [
         Binding("l", "app.pop_screen", "Back to Dashboard"),
         Binding("escape", "app.pop_screen", "Back to Dashboard"),
@@ -241,13 +248,16 @@ class SampleListScreen(Screen):
     def action_show_command_bar(self) -> None:
         self.app.action_show_command_bar()
 
+
 class CommandScreen(ModalScreen):
     """A modal screen for entering commands at the top."""
 
     def compose(self) -> ComposeResult:
         with Vertical(id="command_dialog_container"):
             yield Static("Enter Command / Search:", id="command_title")
-            yield Input(placeholder="e.g., search kick, scan, tag 1 drum...", id="command_input")
+            yield Input(
+                placeholder="e.g., search kick, scan, tag 1 drum...", id="command_input"
+            )
             yield Static("Press Enter to run, Escape to cancel", id="command_footer")
 
     def on_mount(self) -> None:
@@ -262,6 +272,7 @@ class CommandScreen(ModalScreen):
     def on_key(self, event) -> None:
         if event.key == "escape":
             self.app.pop_screen()
+
 
 class SampleManagerApp(App):
     CSS = """
@@ -471,9 +482,9 @@ class SampleManagerApp(App):
         """Update the results panel with a message."""
         try:
             output = self.query_one("#output_text", Static)
-        except:
+        except Exception:
             return
-            
+
         if not hasattr(self, "_log_history"):
             self._log_history = []
         self._log_history.append(f"> {message}")
@@ -489,8 +500,12 @@ class SampleManagerApp(App):
                 result = self.controller.handle_input(f"tag {sample_id} {tag_name}")
                 self.log_result(result)
                 self.action_refresh_samples()
-        
-        self.push_screen(InputDialog(f"Add Tag to sample {sample_id}", "Enter tag name...", handle_tag))
+
+        self.push_screen(
+            InputDialog(
+                f"Add Tag to sample {sample_id}", "Enter tag name...", handle_tag
+            )
+        )
 
     def prompt_rating(self, sample_id: str) -> None:
         def handle_rating(rating: str):
@@ -502,21 +517,30 @@ class SampleManagerApp(App):
                     self.action_refresh_samples()
                 except ValueError:
                     self.log_result("Error: Rating must be a number 1-5")
-        
-        self.push_screen(InputDialog(f"Rate sample {sample_id} (1-5)", "Enter rating...", handle_rating))
+
+        self.push_screen(
+            InputDialog(
+                f"Rate sample {sample_id} (1-5)", "Enter rating...", handle_rating
+            )
+        )
 
     def prompt_search(self) -> None:
         def handle_search(query: str):
             if query.strip():
                 self.perform_search(query)
-        
-        self.push_screen(InputDialog("Search Samples", "Enter search query...", handle_search))
+
+        self.push_screen(
+            InputDialog("Search Samples", "Enter search query...", handle_search)
+        )
 
     def action_show_command_bar(self) -> None:
         self.push_screen(CommandScreen())
 
     def action_toggle_playback(self, sample_id: str, is_auto: bool = False) -> None:
-        """Play or stop the selected sample. is_auto is True when triggered by navigation."""
+        """Play or stop the selected sample.
+
+        is_auto is True when triggered by navigation.
+        """
         if self.player.is_playing():
             self.player.stop()
             if not is_auto:
@@ -541,10 +565,10 @@ class SampleManagerApp(App):
         """Format duration into a readable string (e.g., 30s, 1m 20s)."""
         if seconds < 60:
             return f"{int(round(seconds))}s"
-        
+
         minutes = int(seconds // 60)
         remaining_seconds = int(round(seconds % 60))
-        
+
         if remaining_seconds == 0:
             return f"{minutes}m"
         return f"{minutes}m {remaining_seconds}s"
@@ -556,9 +580,21 @@ class SampleManagerApp(App):
 
         # Known base commands
         base_commands = {
-            "scan", "rescan", "list", "dirs", "add-dir", "rm-dir", 
-            "tag", "rate", "stats", "search", "duplicates",
-            "bulk-tag", "bulk-rename", "bulk-convert", "bulk-normalize"
+            "scan",
+            "rescan",
+            "list",
+            "dirs",
+            "add-dir",
+            "rm-dir",
+            "tag",
+            "rate",
+            "stats",
+            "search",
+            "duplicates",
+            "bulk-tag",
+            "bulk-rename",
+            "bulk-convert",
+            "bulk-normalize",
         }
         first_word = cmd_text.split()[0].lower() if cmd_text.split() else ""
 
@@ -567,7 +603,7 @@ class SampleManagerApp(App):
             query = cmd_text[7:].strip()
             self.perform_search(query)
             return
-        
+
         # Handle bulk commands
         if first_word.startswith("bulk-"):
             parts = cmd_text.split(None, 2)
@@ -590,7 +626,7 @@ class SampleManagerApp(App):
             else:
                 self.log_result(f"Error: {first_word} requires <query> <parameters>")
                 return
-        
+
         # Auto-detect filtering if it contains a colon and isn't a known command
         if ":" in cmd_text and first_word not in base_commands:
             self.perform_search(cmd_text)
@@ -616,6 +652,7 @@ class SampleManagerApp(App):
         if first_word == "scan" and "--analyze" in cmd_text:
             self.log_result("Starting deep scan (BPM/Key detection enabled)...")
             from sample_manager.scanner.indexer import index_samples
+
             index_samples(analyze=True)
             self.action_refresh_samples()
             return
@@ -624,6 +661,7 @@ class SampleManagerApp(App):
             parts = cmd_text.split()
             if len(parts) >= 2:
                 dir_path = " ".join(parts[1:])
+
                 def do_remove(confirmed):
                     if confirmed:
                         try:
@@ -633,7 +671,12 @@ class SampleManagerApp(App):
                             self.action_refresh_samples()
                         except Exception as e:
                             self.log_result(f"Error: {e}")
-                self.push_screen(ConfirmationDialog(f"Remove directory '{dir_path}' from library?", do_remove))
+
+                self.push_screen(
+                    ConfirmationDialog(
+                        f"Remove directory '{dir_path}' from library?", do_remove
+                    )
+                )
             else:
                 self.log_result("Error: rm-dir requires <path>.")
             return
@@ -641,10 +684,13 @@ class SampleManagerApp(App):
         # Handle other commands via controller
         result = self.controller.handle_input(cmd_text)
         self.log_result(result)
-        
+
         # If command might change data, refresh list
 
-        if any(keyword in cmd_text.lower() for keyword in ("scan", "tag", "rate", "unrate", "rm-dir")):
+        if any(
+            keyword in cmd_text.lower()
+            for keyword in ("scan", "tag", "rate", "unrate", "rm-dir")
+        ):
             self.action_refresh_samples()
 
     @on(Input.Submitted)
@@ -664,7 +710,7 @@ class SampleManagerApp(App):
         remaining_query = []
 
         for part in parts:
-            part = part.strip(",") # Handle tag:kick, etc
+            part = part.strip(",")  # Handle tag:kick, etc
             if ":" in part:
                 key, val = part.split(":", 1)
                 if key == "tag":
@@ -674,12 +720,14 @@ class SampleManagerApp(App):
                 elif key == "rating":
                     # Handle rating:>3 etc
                     import re
+
                     match = re.match(r"([><=]{1,2})?(\d)", val)
                     if match:
                         op = match.group(1) or "="
                         filters["rating"] = (op, int(match.group(2)))
                 elif key == "bpm":
                     import re
+
                     match = re.match(r"([><=]{1,2})?(\d+)", val)
                     if match:
                         op = match.group(1) or "="
@@ -696,7 +744,7 @@ class SampleManagerApp(App):
                     self.sort_direction = sort_order
             else:
                 remaining_query.append(part)
-        
+
         if remaining_query:
             filters["query"] = " ".join(remaining_query)
 
@@ -706,12 +754,12 @@ class SampleManagerApp(App):
             try:
                 target_table = screen.query_one(SampleTable)
                 break
-            except:
+            except Exception:
                 continue
 
         if not target_table:
             return
-             
+
         target_table.clear()
         results = search_samples(filters, sort_by=sort_by, sort_order=sort_order)
         self.current_sample_ids = [s["id"] for s in results]
@@ -724,39 +772,46 @@ class SampleManagerApp(App):
                 str(s["rating"]) if s["rating"] is not None else "",
                 str(s["bpm"]) if s["bpm"] is not None else "",
                 s["musical_key"] or "",
-                self.format_duration(s["duration"]) if s["duration"] else ""
+                self.format_duration(s["duration"]) if s["duration"] else "",
             )
-        
-        filter_summary = ", ".join([f"{k}:{v}" for k,v in filters.items()])
-        self.log_result(f"Search results for [{filter_summary}] (Sort: {sort_by}): {len(results)}")
+
+        filter_summary = ", ".join([f"{k}:{v}" for k, v in filters.items()])
+        self.log_result(
+            f"Search results for [{filter_summary}] (Sort: {sort_by}): {len(results)}"
+        )
 
     def perform_bulk_tag(self, query: str, tag: str) -> None:
         self.perform_search(query)
         if not self.current_sample_ids:
             self.log_result(f"No samples found for query: {query}")
             return
-            
+
         count = 0
         from sample_manager.db.tag_repository import add_tag_to_sample
+
         for sid in self.current_sample_ids:
             add_tag_to_sample(sid, tag)
             count += 1
-        
+
         self.log_result(f"Bulk tagged {count} samples with '{tag}'")
         self.action_refresh_samples()
 
     def perform_bulk_rename(self, query: str, params: str) -> None:
         if "," not in params:
-            self.log_result("Error: bulk-rename requires <query> <pattern>,<replacement>")
+            self.log_result(
+                "Error: bulk-rename requires <query> <pattern>,<replacement>"
+            )
             return
-            
+
         pattern, replacement = params.split(",", 1)
         self.perform_search(query)
         if not self.current_sample_ids:
             self.log_result(f"No samples found for query: {query}")
             return
-            
-        count = self.batch_processor.rename_samples(self.current_sample_ids, pattern, replacement)
+
+        count = self.batch_processor.rename_samples(
+            self.current_sample_ids, pattern, replacement
+        )
         self.log_result(f"Bulk renamed {count} samples.")
         self.action_refresh_samples()
 
@@ -765,8 +820,10 @@ class SampleManagerApp(App):
         if not self.current_sample_ids:
             self.log_result(f"No samples found for query: {query}")
             return
-            
-        count = self.batch_processor.convert_samples(self.current_sample_ids, target_ext)
+
+        count = self.batch_processor.convert_samples(
+            self.current_sample_ids, target_ext
+        )
         self.log_result(f"Bulk converted {count} samples to {target_ext}.")
         self.action_refresh_samples()
 
@@ -781,27 +838,37 @@ class SampleManagerApp(App):
         if not self.current_sample_ids:
             self.log_result(f"No samples found for query: {query}")
             return
-            
+
         count = self.batch_processor.normalize_samples(self.current_sample_ids, db_val)
         self.log_result(f"Bulk normalized {count} samples to {db_val}dB.")
         self.action_refresh_samples()
 
     def perform_deep_analyze(self, sample_id: int) -> None:
-        from sample_manager.db.sample_repository import get_sample_by_id, bulk_create_samples
+        from sample_manager.db.sample_repository import (
+            bulk_create_samples,
+            get_sample_by_id,
+        )
+
         sample = get_sample_by_id(sample_id)
         if not sample:
             self.log_result(f"Sample {sample_id} not found.")
             return
-            
+
         self.log_result(f"Analyzing sample {sample_id} ({sample['filename']})...")
-        from sample_manager.scanner.metadata import extract_metadata
         from pathlib import Path
+
+        from sample_manager.scanner.metadata import extract_metadata
+
         meta = extract_metadata(Path(sample["path"]), analyze=True)
-        
+
         # Update DB using bulk_create_samples which handles conflict/update
         bulk_create_samples([meta])
-        self.log_result(f"Analysis complete: BPM={meta['bpm']}, Key={meta['musical_key']}, Dur={meta['duration']}s")
+        self.log_result(
+            f"Analysis complete: BPM={meta['bpm']}, "
+            f"Key={meta['musical_key']}, Dur={meta['duration']}s"
+        )
         self.action_refresh_samples()
+
 
 class DuplicatesScreen(ModalScreen):
     """Screen for managing duplicate samples."""
@@ -812,10 +879,13 @@ class DuplicatesScreen(ModalScreen):
             Static("Scanning for bit-for-bit identical files...", id="duplicates_desc"),
             DataTable(id="duplicates_list"),
             Horizontal(
-                Static("Press 'd' to delete selected file, 'Esc' to close", id="duplicates_help"),
-                id="duplicates_footer"
+                Static(
+                    "Press 'd' to delete selected file, 'Esc' to close",
+                    id="duplicates_help",
+                ),
+                id="duplicates_footer",
             ),
-            id="duplicates_container"
+            id="duplicates_container",
         )
 
     def on_mount(self) -> None:
@@ -827,14 +897,14 @@ class DuplicatesScreen(ModalScreen):
     def refresh_duplicates(self) -> None:
         table = self.query_one("#duplicates_list", DataTable)
         table.clear()
-        
+
         duplicate_groups = get_duplicates_grouped()
-        
+
         if not duplicate_groups:
             self.app.notify("No duplicates found!", severity="information")
             self.dismiss()
             return
-            
+
         self.query_one("#duplicates_desc", Static).update(
             f"Found {len(duplicate_groups)} groups of identical files. "
             "Highlight a file and press 'd' to safely remove it from the database."
@@ -850,7 +920,7 @@ class DuplicatesScreen(ModalScreen):
                     s["filename"],
                     s["path"],
                     s["tags"] or "",
-                    str(s["rating"]) if s["rating"] else ""
+                    str(s["rating"]) if s["rating"] else "",
                 )
 
     def on_key(self, event) -> None:
@@ -862,13 +932,15 @@ class DuplicatesScreen(ModalScreen):
                 sample_id = row_data[0]
                 if sample_id == "---":
                     return
-                
+
                 def do_delete(confirmed):
                     if confirmed:
                         self.confirm_delete(sample_id, "YES")
 
                 self.app.push_screen(
-                    ConfirmationDialog(f"Delete sample {sample_id} from database?", do_delete)
+                    ConfirmationDialog(
+                        f"Delete sample {sample_id} from database?", do_delete
+                    )
                 )
         elif event.key == "escape":
             self.dismiss()
@@ -881,6 +953,7 @@ class DuplicatesScreen(ModalScreen):
                 self.refresh_duplicates()
             except Exception as e:
                 self.app.notify(f"Error deleting: {e}", severity="error")
+
 
 if __name__ == "__main__":
     app = SampleManagerApp()

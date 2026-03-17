@@ -18,20 +18,23 @@ def index_samples(analyze: bool = False):
         for path in scan_directory(directory):
             meta = extract_metadata(path, analyze=analyze)
             # Store with all fields
-            all_metadata.append({
-                "path": meta["path"],
-                "filename": meta["filename"],
-                "extension": meta["extension"],
-                "size": meta["size"],
-                "hash": calculate_hash(path),
-                "bpm": meta["bpm"],
-                "musical_key": meta["musical_key"],
-                "duration": meta["duration"]
-            })
+            all_metadata.append(
+                {
+                    "path": meta["path"],
+                    "filename": meta["filename"],
+                    "extension": meta["extension"],
+                    "size": meta["size"],
+                    "hash": calculate_hash(path),
+                    "bpm": meta["bpm"],
+                    "musical_key": meta["musical_key"],
+                    "duration": meta["duration"],
+                }
+            )
 
     if all_metadata:
         bulk_create_samples(all_metadata)
         logger.info(f"Successfully indexed {len(all_metadata)} samples.")
+
 
 def remove_deleted_files():
     """

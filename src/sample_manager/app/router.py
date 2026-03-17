@@ -1,5 +1,5 @@
 from sample_manager.app.validators import validate_directory
-from sample_manager.db.rating_repository import set_rating, remove_rating
+from sample_manager.db.rating_repository import remove_rating, set_rating
 from sample_manager.db.sample_repository import (
     get_all_samples,
     get_sample_count,
