@@ -148,6 +148,7 @@ class SampleTable(DataTable):
         Binding("r", "add_rating", "Add Rating", show=False),
         Binding("/", "search", "Search", show=False),
         Binding("space", "toggle_playback", "Play", show=False),
+        Binding("c", "copy_file", "Copy File", show=False),
     ]
 
     def action_toggle_playback(self) -> None:
@@ -219,6 +220,29 @@ class SampleTable(DataTable):
             sample_id = row_data[0]
             self.app.prompt_rating(sample_id)
 
+    def action_copy_file(self) -> None:
+        row_key = self.cursor_row
+        if row_key is not None:
+            # Get ID from first column
+            row_data = self.get_row_at(row_key)
+            sample_id = row_data[0]
+            self.app.action_copy_file(sample_id)
+
+    @on(DataTable.RowSelected)
+    def on_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Copy file when Enter is pressed on a row."""
+        row_data = self.get_row_at(event.cursor_row)
+        sample_id = row_data[0]
+        self.app.action_copy_file(sample_id)
+
+    def action_copy_file(self) -> None:
+        """Copy file when 'c' is pressed."""
+        row_key = self.cursor_row
+        if row_key is not None:
+            row_data = self.get_row_at(row_key)
+            sample_id = row_data[0]
+            self.app.action_copy_file(sample_id)
+
 
 class SampleListScreen(Screen):
     """A full-screen view of the sample list."""
@@ -247,6 +271,14 @@ class SampleListScreen(Screen):
 
     def action_show_command_bar(self) -> None:
         self.app.action_show_command_bar()
+
+    def action_copy_file(self) -> None:
+        """Proxy copy file action to the focused table."""
+        try:
+            table = self.query_one(SampleTable)
+            table.action_copy_file()
+        except Exception:
+            pass
 
 
 class CommandScreen(ModalScreen):
@@ -560,6 +592,44 @@ class SampleManagerApp(App):
                 self.audition_mode = False
             else:
                 self.log_result(f"Playing: {os.path.basename(path)}")
+
+    def action_copy_file(self, sample_id: str) -> None:
+        """Copy the actual file of the sample to the clipboard (macOS)."""
+        import platform
+        import subprocess
+
+        try:
+            sid = int(sample_id)
+        except ValueError:
+            sid = sample_id
+
+        sample = get_sample_by_id(sid)
+        if not sample:
+            self.log_result(f"Error: Sample {sid} not found in database.")
+            return
+
+        path = sample["path"]
+        if not os.path.exists(path):
+            self.log_result(f"Error: File does not exist on disk at {path}")
+            return
+
+        system = platform.system()
+        if system == "Darwin":
+            try:
+                # macOS AppleScript to copy file to clipboard
+                # tell application "Finder" ensures the clipboard is set correctly for Finder/DAWs
+                escaped_path = path.replace('"', '\\"')
+                script = f'tell application "Finder" to set the clipboard to (POSIX file "{escaped_path}")'
+                result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    self.log_result(f"Copied: {os.path.basename(path)}")
+                else:
+                    self.log_result(f"Error: Failed to copy to clipboard (osascript error: {result.stderr.strip()})")
+            except Exception as e:
+                self.log_result(f"Error: Unexpected exception during copy: {e}")
+        else:
+            self.log_result(f"Error: Copy to clipboard is only supported on macOS.")
 
     def format_duration(self, seconds: float) -> str:
         """Format duration into a readable string (e.g., 30s, 1m 20s)."""

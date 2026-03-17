@@ -80,6 +80,7 @@ sample-manager
 - `f` - Focus command input
 - `Arrow keys` - Navigate sample list
 - `Space` - Yoggle preview
+- `Enter` - Copy sample file to clipboard
 - `t` - Add tag to focussed sample
 - `r` - Rate focussed sample
 - `^p` - Settings page
