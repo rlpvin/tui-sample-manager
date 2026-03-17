@@ -1,27 +1,43 @@
-# Python
+# Python Bytecode
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Virtual env
+# Virtual Environments
+venv/
 .venv/
 env/
+.env/
 
 # Logs
-logs/
-./**/*.log
 *.log
+logs/
 
 # Database
 data/
 *.db
+*.db-wal
+*.db-shm
 
-# IDE
+# Build and Packaging
+build/
+dist/
+*.egg-info/
+
+# Tests & Linting
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDEs
 .vscode/
+.idea/
 
-# OS
+# OS Specific
 .DS_Store
+Thumbs.db
 
 # Other
 plan/
