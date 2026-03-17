@@ -20,7 +20,30 @@ A keyboard-first terminal-based audio sample manager for music producers and sou
 - **macOS**: `afplay` (pre-installed)
 - **Linux**: `aplay` (ALSA) or `play` (SoX)
 
-### One-Step Install (Direct from GitHub)
+### Recommended: Homebrew + pipx (macOS/Linux)
+
+The simplest and cleanest way to install the TUI Sample Manager is using Homebrew to install `pipx`, which manages isolated Python environments for CLI tools.
+
+1. **Install pipx** (if you don't have it):
+   ```bash
+   brew install pipx
+   pipx ensurepath
+   ```
+   *Note: You may need to restart your terminal after running `ensurepath`.*
+
+2. **Install the application**:
+   ```bash
+   pipx install git+https://github.com/rlpvin/tui-sample-manager.git
+   ```
+
+3. **Run**:
+   ```bash
+   sample-manager
+   ```
+
+### Other Installation Methods
+
+#### One-Step Install (Direct from GitHub)
 
 ```bash
 pip install git+https://github.com/rlpvin/tui-sample-manager.git
