@@ -1,14 +1,12 @@
 from pathlib import Path
 
 from sample_manager.db.connection import get_connection
-from sample_manager.db.init_db import initialize_database
 
 MIGRATIONS_PATH = Path(__file__).parent / "migrations"
 
 
 def run_migrations():
     """Apply pending database migrations."""
-    initialize_database()
 
     conn = get_connection()
     cursor = conn.cursor()

@@ -1,0 +1,1 @@
+recursive-include src/sample_manager/db/migrations *.sql

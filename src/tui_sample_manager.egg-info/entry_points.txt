@@ -1,0 +1,2 @@
+[console_scripts]
+sample-manager = sample_manager.main:main
